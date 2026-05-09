@@ -66,13 +66,22 @@ export function initPlayer({ audio, view: initialView }) {
 
   const state = {
     playing: false,
-    currentIdx: 0,
+    currentTrack: null,   // the actual track object playing — persists across view changes
+    queue: [],            // track list captured when playback started; next/prev advance through it
     progress: 0,
     liked: new Set(),
     shuffle: false,
     repeat: false,
     volume: 0.6,
   };
+
+  // Index of the currently-playing track within the *current view's* list,
+  // for highlighting. -1 if the playing track isn't visible here.
+  function visibleIdx() {
+    const cur = state.currentTrack;
+    if (!cur) return -1;
+    return tracks.findIndex((t) => t === cur || (t.id != null && t.id === cur.id));
+  }
 
   const els = {
     pageCrumb: $('pageCrumb'),
@@ -182,8 +191,9 @@ export function initPlayer({ audio, view: initialView }) {
     els.trackSectionH3.textContent = ts.title || 'Tracks';
 
     els.trackList.innerHTML = '';
+    const curIdx = visibleIdx();
     tracks.forEach((t, i) => {
-      const isCurrent = i === state.currentIdx;
+      const isCurrent = i === curIdx;
       const playingHere = isCurrent && state.playing;
       const liked = state.liked.has(i);
       const row = document.createElement('div');
@@ -249,14 +259,17 @@ export function initPlayer({ audio, view: initialView }) {
   }
 
   function renderNowPlaying() {
-    const t = tracks[state.currentIdx];
+    const t = state.currentTrack;
     if (!t) {
       els.nowTitle.textContent = '—';
       els.nowArtist.textContent = '';
       return;
     }
     els.nowTitle.textContent = t.title;
-    const artistLine = view.hero?.title || '';
+    // Prefer the track's own artist (set when loaded from view A) over the
+    // current view's hero title, so the transport keeps showing the right
+    // artist after the user navigates away.
+    const artistLine = t.artist || (visibleIdx() >= 0 ? view.hero?.title : '') || '';
     els.nowArtist.textContent = artistLine ? `${artistLine} · ${t.album || ''}` : t.album || '';
     els.nowCover.style.background = coverBg(t);
     els.nowCover.classList.toggle('has-art', !!t.artwork);
@@ -264,7 +277,8 @@ export function initPlayer({ audio, view: initialView }) {
     els.miniCover.classList.toggle('has-art', !!t.artwork);
     els.miniTitle.textContent = t.title;
     els.miniArtist.textContent = els.nowArtist.textContent;
-    const liked = state.liked.has(state.currentIdx);
+    const idx = visibleIdx();
+    const liked = idx >= 0 && state.liked.has(idx);
     els.nowLike.classList.toggle('on', liked);
     els.nowLike.querySelector('svg').setAttribute('fill', liked ? 'currentColor' : 'none');
     els.totTime.textContent = t.duration;
@@ -302,9 +316,17 @@ export function initPlayer({ audio, view: initialView }) {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   function loadTrack(idx, { autoplay = false } = {}) {
-    state.currentIdx = idx;
+    // Capture this view's tracks as the active queue (snapshot the reference
+    // so navigating elsewhere doesn't redirect next/prev to the new view).
+    state.queue = tracks;
+    state.currentTrack = tracks[idx];
+    // Stamp the track with the current artist context so the transport can
+    // keep showing it after the user navigates away.
+    if (state.currentTrack && !state.currentTrack.artist && view.hero?.title) {
+      state.currentTrack.artist = view.hero.title;
+    }
     state.progress = 0;
-    audio.load(tracks[idx]);
+    audio.load(state.currentTrack);
     renderNowPlaying();
     renderTrackSection();
     renderProgress();
@@ -330,19 +352,31 @@ export function initPlayer({ audio, view: initialView }) {
     state.playing ? pause() : play();
   }
 
-  function next() {
-    if (!tracks.length) return;
-    const idx = state.shuffle
-      ? Math.floor(Math.random() * tracks.length)
-      : (state.currentIdx + 1) % tracks.length;
-    loadTrack(idx, { autoplay: state.playing });
+  // Advance through the active queue (the track list captured when playback
+  // last started), not the current view's list. That way switching tabs
+  // doesn't change what next/prev mean.
+  function advance(delta) {
+    const q = state.queue;
+    if (!q.length) return;
+    const cur = state.currentTrack;
+    const here = cur ? q.findIndex((t) => t === cur || (t.id != null && t.id === cur.id)) : -1;
+    let idx;
+    if (state.shuffle && delta > 0) {
+      idx = Math.floor(Math.random() * q.length);
+    } else {
+      idx = ((here < 0 ? 0 : here + delta) + q.length) % q.length;
+    }
+    state.currentTrack = q[idx];
+    state.progress = 0;
+    audio.load(state.currentTrack);
+    renderNowPlaying();
+    renderTrackSection();
+    renderProgress();
+    if (state.playing) play();
   }
 
-  function prev() {
-    if (!tracks.length) return;
-    const idx = (state.currentIdx - 1 + tracks.length) % tracks.length;
-    loadTrack(idx, { autoplay: state.playing });
-  }
+  function next() { advance(1); }
+  function prev() { advance(-1); }
 
   function toggleLike(idx) {
     state.liked.has(idx) ? state.liked.delete(idx) : state.liked.add(idx);
@@ -362,7 +396,9 @@ export function initPlayer({ audio, view: initialView }) {
     const row = e.target.closest('.row');
     if (!row) return;
     const idx = Number(row.dataset.idx);
-    if (idx === state.currentIdx) {
+    // Toggle only if the clicked row is the *currently playing* track in
+    // this view. Otherwise start playback from this view's queue.
+    if (idx === visibleIdx() && state.queue === tracks) {
       togglePlay();
     } else {
       loadTrack(idx, { autoplay: true });
@@ -397,7 +433,10 @@ export function initPlayer({ audio, view: initialView }) {
     view.hero?.secondaryAction?.onClick?.();
   });
 
-  els.nowLike.addEventListener('click', () => toggleLike(state.currentIdx));
+  els.nowLike.addEventListener('click', () => {
+    const idx = visibleIdx();
+    if (idx >= 0) toggleLike(idx);
+  });
 
   $('shuffle').addEventListener('click', (e) => {
     state.shuffle = !state.shuffle;
@@ -477,7 +516,11 @@ export function initPlayer({ audio, view: initialView }) {
   // ── Initial render ────────────────────────────────────────────────────────
 
   audio.setVolume(state.volume);
-  if (tracks.length) audio.load(tracks[0]);
+  if (tracks.length) {
+    state.currentTrack = tracks[0];
+    state.queue = tracks;
+    audio.load(tracks[0]);
+  }
   renderAll();
   renderVolume();
 
@@ -487,12 +530,19 @@ export function initPlayer({ audio, view: initialView }) {
     setView(newView) {
       view = newView;
       tracks = view.tracks?.items || [];
-      state.currentIdx = 0;
-      state.progress = 0;
-      state.playing = false;
+      // `liked` keys by index into the current view's list, so it's only
+      // meaningful within one view. Reset on navigation.
       state.liked = new Set();
-      audio.pause();
-      if (tracks.length) audio.load(tracks[0]);
+      // Critical: don't disturb playback when switching views. Only prep the
+      // transport with this view's first track if nothing is currently
+      // playing, so the user doesn't see a blank now-playing on initial nav
+      // before they've started anything.
+      if (!state.playing && tracks.length) {
+        state.currentTrack = tracks[0];
+        state.queue = tracks;
+        state.progress = 0;
+        audio.load(tracks[0]);
+      }
       renderAll();
       // Scroll back to top so users see the new hero, not the previous bottom.
       document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'smooth' });
