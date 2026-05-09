@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Lumen — Liquid Glass Player</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div class="scene">
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+  <div class="blob b4"></div>
+  <div class="blob b5"></div>
+</div>
+<div class="grain"></div>
+
+<div class="stage">
+  <div class="app" data-screen-label="01 Player">
+
+    <!-- Title bar -->
+    <div class="titlebar">
+      <button class="menu-btn ibtn" id="menuBtn" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+      <div class="nav-arrows">
+        <button class="ibtn" id="navBack" title="Back" disabled><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <button class="ibtn" id="navForward" title="Forward" disabled><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+      <div class="global-search" id="globalSearch">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="searchInput" placeholder="Search artists" autocomplete="off" />
+        <div class="search-results" id="searchResults"></div>
+      </div>
+      <div class="right">
+        <button class="ibtn" id="signInBtn" title="Connect Spotify" style="display:none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+        </button>
+        <button class="ibtn" id="tweaksBtn" title="Tweaks">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h13M3 12h8M3 18h13"/><circle cx="19" cy="6" r="2"/><circle cx="14" cy="12" r="2"/><circle cx="19" cy="18" r="2"/></svg>
+        </button>
+        <button class="ibtn" title="AirPlay">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="m8 21 4-4 4 4"/></svg>
+        </button>
+        <div class="user-pill" id="userPill">
+          <div class="av" id="userAv">EC</div>
+          <div class="nm" id="userNm">Elena</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="side" id="side">
+
+      <div class="side-section">
+        <h6>Listen Now</h6>
+        <div class="side-item on" data-view="for-you">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+          For You
+        </div>
+        <div class="side-item" data-view="browse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 4v16M10 4v16M16 5l5 14"/></svg>
+          Browse
+        </div>
+        <div class="side-item" data-view="radio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M5.6 18.4a9 9 0 010-12.8M18.4 5.6a9 9 0 010 12.8"/></svg>
+          Radio
+        </div>
+      </div>
+
+      <div class="side-section">
+        <h6>Library</h6>
+        <div class="side-item" data-view="recently-added">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+          Recently Added
+        </div>
+        <div class="side-item" data-view="songs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="18" r="3"/><circle cx="20" cy="16" r="3"/><path d="M12 18V6l11-2v12"/></svg>
+          Songs
+        </div>
+        <div class="side-item" data-view="albums">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          Albums
+        </div>
+        <div class="side-item" data-view="artists">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>
+          Artists
+        </div>
+      </div>
+
+      <div class="side-section" id="playlistSection">
+        <h6>Playlists</h6>
+        <div class="side-item">
+          <span class="pl-cv" style="background: linear-gradient(135deg,#ff5d8f,#ffb088)"></span>
+          Slow Light, Long Drive
+        </div>
+        <div class="side-item">
+          <span class="pl-cv" style="background: linear-gradient(135deg,#6ee7ff,#3b6cff)"></span>
+          Coastline Sessions
+        </div>
+        <div class="side-item">
+          <span class="pl-cv" style="background: linear-gradient(135deg,#7cf2a5,#0d4f3c)"></span>
+          Tuesday Mornings
+        </div>
+        <div class="side-item">
+          <span class="pl-cv" style="background: linear-gradient(135deg,#ffd166,#ef476f)"></span>
+          Reading Room
+        </div>
+        <div class="side-item">
+          <span class="pl-cv" style="background: linear-gradient(135deg,#b388ff,#5a1d8c)"></span>
+          Velvet Lab
+        </div>
+        <div class="side-item">
+          <span class="pl-cv" style="background: linear-gradient(135deg,#a0e7ff,#1a3b6b)"></span>
+          Linen Sunday
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <div class="page-head">
+        <div>
+          <div class="crumb" id="pageCrumb">For You</div>
+          <h1 id="pageTitle">Today</h1>
+        </div>
+        <div class="seg">
+          <button class="on">Overview</button>
+          <button>Songs</button>
+          <button>Discography</button>
+        </div>
+      </div>
+
+      <!-- Hero -->
+      <div class="hero" id="hero">
+        <div class="text">
+          <div class="verified" id="heroLabel">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m5 12 4 4 10-10"/></svg>
+            <span id="heroLabelText">Featured Artist</span>
+          </div>
+          <h2 id="heroTitle">Marisol Vega</h2>
+          <div class="stat" id="heroStat">32,184,920 monthly listeners · Indie · Dream-pop</div>
+          <div class="actions">
+            <button class="btn btn-primary" id="heroPlay">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>
+              Play
+            </button>
+            <button class="btn btn-ghost" id="heroSecondary">Following</button>
+          </div>
+        </div>
+        <div class="portrait" id="heroPortrait">ARTIST PORTRAIT · drop image</div>
+      </div>
+
+      <!-- Popular tracks -->
+      <div class="section-title" id="trackSectionTitle">
+        <h3 id="trackSectionH3">Popular this month</h3>
+        <span class="more">See all</span>
+      </div>
+      <div class="tracks" id="trackList"></div>
+
+      <!-- Albums rail -->
+      <div class="section-title" id="railSectionTitle">
+        <h3 id="railSectionH3">Discography</h3>
+        <span class="more">See all</span>
+      </div>
+      <div class="rail" id="rail">
+        <div class="card">
+          <div class="art" style="background: radial-gradient(120% 120% at 30% 20%, #4a6fff 0%, #1a1f3c 60%);">
+            <div class="label">Salt &amp; Glass</div>
+            <div class="glow"></div>
+          </div>
+          <div class="meta"><div class="nm">Salt &amp; Glass</div><div class="ar">2025 · Album</div></div>
+        </div>
+        <div class="card">
+          <div class="art" style="background: radial-gradient(120% 120% at 70% 80%, #ff7eb6 0%, #5a1d3a 60%);">
+            <div class="label">Hover Years</div>
+            <div class="glow"></div>
+          </div>
+          <div class="meta"><div class="nm">Hover Years — EP</div><div class="ar">2024 · EP</div></div>
+        </div>
+        <div class="card">
+          <div class="art" style="background: radial-gradient(120% 120% at 40% 60%, #7cf2a5 0%, #14442a 60%);">
+            <div class="label">Linen Sunday</div>
+            <div class="glow"></div>
+          </div>
+          <div class="meta"><div class="nm">Linen Sunday</div><div class="ar">2022 · Album</div></div>
+        </div>
+        <div class="card">
+          <div class="art" style="background: radial-gradient(120% 120% at 50% 30%, #ffb088 0%, #2a0a3a 60%);">
+            <div class="label">Almost a Postcard</div>
+            <div class="glow"></div>
+          </div>
+          <div class="meta"><div class="nm">Almost a Postcard</div><div class="ar">2020 · Single</div></div>
+        </div>
+      </div>
+
+      <div style="height:8px"></div>
+    </main>
+
+    <!-- Transport (desktop) -->
+    <div class="transport">
+      <div class="now">
+        <div class="cv" id="nowCover" style="background: linear-gradient(135deg,#6ee7ff,#b388ff)"></div>
+        <div style="min-width:0">
+          <div class="nm" id="nowTitle">Hover Years</div>
+          <div class="ar" id="nowArtist">Marisol Vega · Hover Years — EP</div>
+        </div>
+        <div class="like" id="nowLike" title="Like">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="ctrl-row">
+          <button class="cbtn" id="shuffle" title="Shuffle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+          </button>
+          <button class="cbtn" id="prev" title="Previous">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h2v16H6zM20 4 9 12l11 8z"/></svg>
+          </button>
+          <button class="cbtn play" id="play" title="Play / Pause">
+            <svg id="playIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>
+          </button>
+          <button class="cbtn" id="next" title="Next">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 4h2v16h-2zM4 4l11 8L4 20z"/></svg>
+          </button>
+          <button class="cbtn" id="repeat" title="Repeat">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </button>
+        </div>
+        <div class="scrub">
+          <span id="curTime">0:00</span>
+          <div class="bar" id="bar">
+            <div class="fill" id="fill"></div>
+            <div class="knob" id="knob"></div>
+          </div>
+          <span id="totTime">3:48</span>
+        </div>
+      </div>
+
+      <div class="right-side">
+        <button class="cbtn" title="Lyrics">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h12M4 18h8"/></svg>
+        </button>
+        <button class="cbtn" title="Queue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h13M3 12h13M3 18h9M19 14v6M16 17h6"/></svg>
+        </button>
+        <button class="cbtn" title="Devices">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="11" rx="2"/><path d="M8 21h8M12 16v5"/></svg>
+        </button>
+        <div class="vol">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity=".75"><path d="M11 5 6 9H2v6h4l5 4Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+          <div class="vbar" id="vbar"><div class="vfill" id="vfill"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile minibar -->
+    <div class="minibar" style="position:relative">
+      <div class="cv" id="miniCover"></div>
+      <div class="info">
+        <div class="nm" id="miniTitle">Hover Years</div>
+        <div class="ar" id="miniArtist">Marisol Vega</div>
+      </div>
+      <div class="actions">
+        <button class="cbtn" id="miniPrev"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h2v16H6zM20 4 9 12l11 8z"/></svg></button>
+        <button class="cbtn play" id="miniPlay"><svg id="miniPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg></button>
+        <button class="cbtn" id="miniNext"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 4h2v16h-2zM4 4l11 8L4 20z"/></svg></button>
+      </div>
+      <div class="scrub-mini"><div class="fill" id="miniFill"></div></div>
+    </div>
+
+    <!-- Mobile tab bar -->
+    <nav class="tabbar">
+      <button class="on">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+        Listen Now
+      </button>
+      <button>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 4v16M10 4v16M16 5l5 14"/></svg>
+        Browse
+      </button>
+      <button>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M5.6 18.4a9 9 0 010-12.8M18.4 5.6a9 9 0 010 12.8"/></svg>
+        Radio
+      </button>
+      <button>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16v12H4z"/><path d="M4 10h16"/></svg>
+        Library
+      </button>
+      <button>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        Search
+      </button>
+    </nav>
+
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+</div>
+
+<audio id="audio" preload="metadata"></audio>
+<div id="tweaks-root"></div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
