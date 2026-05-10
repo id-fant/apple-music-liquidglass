@@ -16,7 +16,13 @@
 // look at the artist; short enough to feel alive.
 const FEATURED_INTERVAL_MS = 14000;
 
-export function createViews(catalog, navigate) {
+export function createViews(catalog, navigate, opts = {}) {
+  // `authBlocked` differentiates "user never connected" from "user connected
+  // but Spotify Web API refuses to talk to them" (Premium-required, or any
+  // other probe error). Library views read this to choose between
+  // "Connect Spotify" and "Spotify Premium required" messaging.
+  const authBlocked = opts.authBlocked || null;
+
   // Auto-rotation state. The token guards against a stale fetch (kicked off
   // by the timer) landing after the user has navigated to a different view —
   // every non-For-You loader bumps the token before doing its own work.
@@ -79,12 +85,27 @@ export function createViews(catalog, navigate) {
   }
 
   function renderLockedView(player, crumb, title, message) {
+    // Replace the generic "Connect Spotify" message with something accurate
+    // when the user IS connected but the Web API rejected them. Without
+    // this, a Premium-blocked user sees "Connect Spotify..." right after
+    // they just connected, with no clue why it's failing.
+    const realMessage =
+      authBlocked === 'premium'
+        ? 'Spotify Web API requires a Premium account in development mode — your connection is fine, but the API won\'t serve free accounts. Upgrade Spotify or have the developer move the app into Extended mode.'
+      : authBlocked === 'error'
+        ? 'Spotify connected, but the Web API isn\'t reachable right now. Try refreshing.'
+      : message;
+    const realLabel =
+      authBlocked === 'premium' ? 'Spotify Premium required'
+      : authBlocked === 'error' ? 'Spotify unavailable'
+      : 'Premium feature';
+
     player.setView({
       page: { crumb, title },
       hero: {
-        label: 'Premium feature',
+        label: realLabel,
         title,
-        subtitle: message,
+        subtitle: realMessage,
         artwork: null,
         bgColor: null,
         showPortrait: false,

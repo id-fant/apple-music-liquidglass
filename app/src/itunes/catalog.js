@@ -136,11 +136,43 @@ export async function getAlbumFull(albumId) {
   return { album: shapeAlbum(albumObj), tracks };
 }
 
-// "For You" boot view: alternates between Kanye West and Michael Jackson on
-// each page load (state in localStorage). Skips the chart-derived top
-// artist intentionally — the rotation is the user's preferred default.
+// "For You" boot view: rotate through the artists Apple is currently
+// featuring on the iTunes most-played-songs chart. Cached on the first
+// call; each successive call advances by one so the 14s auto-rotation
+// cycles through whoever's at the top of the chart this week.
+let chartArtistsCache = null;
+let chartArtistsIdx = 0;
+
+async function getChartFeaturedArtists() {
+  if (chartArtistsCache) return chartArtistsCache;
+  try {
+    const items = await chartsRequest('songs', 25);
+    const seen = new Set();
+    const names = [];
+    for (const item of items) {
+      const name = item.artistName;
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+        if (names.length >= 5) break;
+      }
+    }
+    chartArtistsCache = names;
+  } catch {
+    chartArtistsCache = [];
+  }
+  return chartArtistsCache;
+}
+
 export async function fetchPrimaryArtist() {
-  return findArtistByName(nextFeaturedArtist());
+  const names = await getChartFeaturedArtists();
+  if (!names.length) {
+    // Chart unreachable — fall back to the static rotation.
+    return findArtistByName(nextFeaturedArtist());
+  }
+  const name = names[chartArtistsIdx % names.length];
+  chartArtistsIdx++;
+  return findArtistByName(name);
 }
 
 // Radio view: top songs chart, hydrated with preview URLs via one batch

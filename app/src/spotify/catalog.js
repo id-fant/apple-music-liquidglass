@@ -197,14 +197,33 @@ export async function fetchNewReleases(limit = 24) {
 
 // ── Unified-interface aliases (mirrors src/itunes/catalog.js) ──────────────
 
-// Boot view: user's #1 top artist (last 4 weeks). Falls back to medium-term
-// then to a popular default if the user has no listening history yet.
+// Cache of the user's top artists used to drive the auto-rotating For You
+// banner. Each fetchPrimaryArtist() call advances through the list, so the
+// 14s rotation cycles through the artists Spotify currently highlights for
+// this user — same set the user sees in their Spotify "Made For You" stats.
+let topArtistsCache = null;
+let topArtistsIdx = 0;
+
+async function getRotationArtists() {
+  if (topArtistsCache) return topArtistsCache;
+  const short = await fetchUserTopArtists(5, 'short_term');
+  if (short.length) { topArtistsCache = short; return short; }
+  const medium = await fetchUserTopArtists(5, 'medium_term');
+  if (medium.length) { topArtistsCache = medium; return medium; }
+  topArtistsCache = [];
+  return topArtistsCache;
+}
+
 export async function fetchPrimaryArtist() {
-  const tops = await fetchUserTopArtists(1, 'short_term');
-  if (tops.length) return getArtistFull(tops[0].id);
-  const longer = await fetchUserTopArtists(1, 'medium_term');
-  if (longer.length) return getArtistFull(longer[0].id);
-  return findArtistByName(nextFeaturedArtist());
+  const list = await getRotationArtists();
+  if (!list.length) {
+    // No listening history — fall back to the static rotation so the page
+    // still has something to show.
+    return findArtistByName(nextFeaturedArtist());
+  }
+  const a = list[topArtistsIdx % list.length];
+  topArtistsIdx++;
+  return getArtistFull(a.id);
 }
 
 // Radio view source. Spotify deprecated /v1/recommendations for new apps,

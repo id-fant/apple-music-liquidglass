@@ -24,6 +24,21 @@
   --dur-press: 140ms;
   --dur-snap: 220ms;
 
+  /* ─── FONTS ─────────────────────────────────────────────────────────────
+     To change a typeface, edit the variable here AND update the Google
+     Fonts <link> in index.html so the new family is actually loaded.
+     Used in:
+       --font-body    →  body text everywhere (default for the whole app)
+       --font-display →  .brand wordmark (titlebar)
+                         .hero h2 (artist / album / playlist title)
+                         .card .art .label (album cover label)
+       --font-mono    →  .hero .portrait placeholder text
+     Buttons, inputs, tab bar etc. inherit via `font-family: inherit` so
+     they all follow --font-body automatically.                            */
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-display: 'Instrument Serif', serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
   --shell-shadow:
     0 1px 0 rgba(255,255,255,0.45) inset,
     0 -1px 0 rgba(0,0,0,0.18) inset,
@@ -35,7 +50,7 @@
 html, body{height:100%}
 body{
   margin:0;
-  font-family:'Inter', system-ui, sans-serif;
+  font-family: var(--font-body);
   color:var(--fg);
   background:#0a1018;
   -webkit-font-smoothing:antialiased;
@@ -44,41 +59,47 @@ body{
 }
 
 /* --- Backdrop ---
-   Iridescent oil-slick: a deep violet base, chrome-coloured blobs that drift
-   AND breathe (scale + opacity inside the same keyframe so the two motions
-   don't fight each other), and a slow horizontal-ripple shimmer overlay that
-   shifts hue. Together they read as the holographic reference image. */
+   Same liquid-glass structure as before (deep base, drifting blobs,
+   horizontal ripple, ambient brightness pulse) but desaturated to a
+   neutral palette — graphite base, pearl/silver highlights, a faint cool
+   tint so the glass reads as material rather than sterile flat gray.
+   The accent colour (--accent) is independent and unaffected. */
 .scene{ position:fixed; inset:0; overflow:hidden;
   background:
-    radial-gradient(140% 90% at 80% 10%, #2a1648 0%, #0a0820 62%),
-    linear-gradient(180deg, #0a0820 0%, #050410 100%);
+    radial-gradient(140% 90% at 80% 10%, #1d2128 0%, #0b0d12 62%),
+    linear-gradient(180deg, #0b0d12 0%, #06070a 100%);
+  animation: scenePulse 7s ease-in-out infinite alternate;
+}
+@keyframes scenePulse{
+  from{ filter: brightness(0.94) saturate(1.0)  }
+  to  { filter: brightness(1.08) saturate(1.06) }
 }
 .scene::after{
   content:""; position:absolute; inset:-15%;
   pointer-events:none;
   background:
     repeating-linear-gradient(8deg,
-      rgba(110,231,255,0.10) 0 60px,
-      rgba(255,126,182,0.12) 60px 140px,
-      rgba(179,136,255,0.10) 140px 220px,
-      rgba(124,184,255,0.08) 220px 320px),
-    linear-gradient(180deg, rgba(110,231,255,0.10), rgba(255,126,182,0.08) 50%, rgba(179,136,255,0.10));
+      rgba(232,238,245,0.10) 0 60px,
+      rgba(255,255,255,0.10) 60px 140px,
+      rgba(200,210,220,0.08) 140px 220px,
+      rgba(176,186,196,0.06) 220px 320px),
+    linear-gradient(180deg, rgba(232,238,245,0.10), rgba(255,255,255,0.06) 50%, rgba(200,210,220,0.08));
   mix-blend-mode: screen;
-  filter: blur(40px) saturate(1.4);
-  opacity: .55;
-  animation: iriShift 18s ease-in-out infinite alternate;
+  /* Period (11s) intentionally offset from scenePulse (7s) so the two
+     pulses don't sync into a single thumping rhythm. */
+  animation: iriShift 11s ease-in-out infinite alternate;
 }
 @keyframes iriShift{
-  from{ transform: translate3d(0,-2%,0); filter: blur(40px) saturate(1.3) hue-rotate(0deg) }
-  to{   transform: translate3d(0, 3%,0); filter: blur(54px) saturate(1.7) hue-rotate(22deg) }
+  from{ transform: translate3d(0,-2%,0); opacity: 0.42; filter: blur(40px) saturate(1.0)  }
+  to  { transform: translate3d(0, 3%,0); opacity: 0.70; filter: blur(54px) saturate(1.15) }
 }
 
 .blob{ position:absolute; border-radius:50%; filter: blur(80px); mix-blend-mode: screen; will-change: transform, opacity }
-.blob.b1{ width:780px;height:780px; left:-180px; top:-160px; background:radial-gradient(circle,#6ee7ff 0%,transparent 70%); animation:drift1 18s ease-in-out infinite alternate }
-.blob.b2{ width:680px;height:680px; right:-120px; top:8%;     background:radial-gradient(circle,#ff7eb6 0%,transparent 70%); animation:drift2 22s ease-in-out infinite alternate }
-.blob.b3{ width:900px;height:900px; left:18%;  bottom:-300px; background:radial-gradient(circle,#b388ff 0%,transparent 70%); animation:drift3 26s ease-in-out infinite alternate }
-.blob.b4{ width:560px;height:560px; right:18%; bottom:-160px; background:radial-gradient(circle,#7cb8ff 0%,transparent 70%); animation:drift4 20s ease-in-out infinite alternate }
-.blob.b5{ width:420px;height:420px; left:42%;  top:36%;       background:radial-gradient(circle,#ffb6f1 0%,transparent 70%); animation:drift5 24s ease-in-out infinite alternate }
+.blob.b1{ width:780px;height:780px; left:-180px; top:-160px; background:radial-gradient(circle,#e8eef5 0%,transparent 70%); animation:drift1 18s ease-in-out infinite alternate }
+.blob.b2{ width:680px;height:680px; right:-120px; top:8%;     background:radial-gradient(circle,#cdd5dd 0%,transparent 70%); animation:drift2 22s ease-in-out infinite alternate }
+.blob.b3{ width:900px;height:900px; left:18%;  bottom:-300px; background:radial-gradient(circle,#aab3bd 0%,transparent 70%); animation:drift3 26s ease-in-out infinite alternate }
+.blob.b4{ width:560px;height:560px; right:18%; bottom:-160px; background:radial-gradient(circle,#dde4ec 0%,transparent 70%); animation:drift4 20s ease-in-out infinite alternate }
+.blob.b5{ width:420px;height:420px; left:42%;  top:36%;       background:radial-gradient(circle,#c0c8d2 0%,transparent 70%); animation:drift5 24s ease-in-out infinite alternate }
 
 @keyframes drift1{ 0%{transform:translate(0,0) scale(1);     opacity:.65} 50%{transform:translate(40px,20px) scale(1.12); opacity:.95} 100%{transform:translate(80px,40px) scale(1.04); opacity:.7} }
 @keyframes drift2{ 0%{transform:translate(0,0) scale(1);     opacity:.6}  50%{transform:translate(-30px,40px) scale(1.1);   opacity:.92} 100%{transform:translate(-60px,80px) scale(1.02); opacity:.7} }
@@ -148,7 +169,7 @@ body{
   position:relative; z-index:2;
 }
 .brand{
-  font-family:'Instrument Serif', serif; font-size:22px; line-height:1;
+  font-family: var(--font-display); font-size:22px; line-height:1;
   color:var(--fg); letter-spacing:.005em;
   padding-right:4px; user-select:none;
 }
@@ -316,7 +337,10 @@ body{
 
 /* Seg-controlled section visibility. Overrides the inline display set by
    the renderers (hence !important). The renderers still own "is the
-   section empty" — these rules only filter by the active tab. */
+   section empty" — these rules only filter by the active tab.
+   Overview = everything (tracks + Discography rail).
+   Songs    = tracks only (rail hidden).
+   Discography = rail only (tracks hidden). */
 .main[data-tab="songs"] #railSectionTitle,
 .main[data-tab="songs"] #rail{ display: none !important }
 .main[data-tab="discography"] #trackSectionTitle,
@@ -366,15 +390,15 @@ body{
   border:1px solid rgba(255,255,255,.18); margin-bottom:10px;
 }
 .hero h2{
-  font-family:'Instrument Serif', serif; font-weight:400;
-  font-size: clamp(30px, 4vw, 52px); line-height:.95; margin:0 0 8px;
+  font-family: var(--font-display); font-weight:400;
+  font-size: clamp(30px, 4vw, 52px); line-height: 1.1; margin: 0 0 14px;
   color:#fff; letter-spacing:-.01em;
-  /* Allow long artist names to wrap to a second line instead of being
-     cut off with an ellipsis. The hero's vertical room is generous
-     enough to absorb two lines at this size. */
+  /* Wrap naturally; no line-clamp — that legacy webkit feature clips
+     descenders (y, g, j, p) at the line box no matter how much padding
+     you add. Line-height 1.1 gives the descenders proper room.        */
   white-space: normal;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-  overflow: hidden;
+  word-break: break-word;
+  overflow: visible;
   text-shadow: 0 2px 30px rgba(0,0,0,.25);
 }
 .hero .stat{ font-size:12.5px; color:rgba(255,255,255,.85); margin-bottom: 14px }
@@ -401,7 +425,7 @@ body{
     repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 8px, transparent 8px 16px),
     linear-gradient(180deg,#222 0%, #0a0a0a 100%);
   display:flex; align-items:flex-end; justify-content:center;
-  color:rgba(255,255,255,.5); font-family:'JetBrains Mono', monospace; font-size:10px;
+  color:rgba(255,255,255,.5); font-family: var(--font-mono); font-size:10px;
   padding:10px;
 }
 /* Soft gradient divider instead of a hard 1px border that would clip
@@ -463,11 +487,41 @@ body{
 .row .dur{ font-size:12px; color:var(--fg-mute); font-variant-numeric: tabular-nums; text-align:right }
 .row .more-c:hover{ color:var(--fg) }
 
-/* Album cards rail */
+/* Album cards rail — horizontal scroll instead of a wrapping grid. Cards
+   are about half their previous on-screen size so several albums fit in
+   the viewport at once and the user scrolls sideways through the rest. */
 .rail{
-  display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+  /* Bleed into the .main padding so the leading edge feels flush, then
+     restore inset via scroll-padding so snapped cards still align. */
+  margin: 0 -22px;
+  padding-left: 22px;
+  padding-right: 22px;
+  scroll-padding: 0 22px;
 }
-.card{ cursor:pointer; transition: transform var(--dur-press) var(--ease-out-strong) }
+.rail::-webkit-scrollbar{ height: 6px }
+.rail::-webkit-scrollbar-track{ background: transparent }
+.rail::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.08); border-radius: 3px }
+.rail::-webkit-scrollbar-thumb:hover{ background: rgba(255,255,255,.16) }
+
+.card{
+  /* Lock the width hard. flex-basis alone can be overridden by intrinsic
+     content sizing (e.g. an image's natural dimensions), so we belt-and-
+     suspenders with width/min/max so every card is exactly the same. */
+  flex: 0 0 auto;
+  width: 215px;
+  min-width: 215px;
+  max-width: 215px;
+  scroll-snap-align: start;
+  cursor:pointer;
+  transition: transform var(--dur-press) var(--ease-out-strong);
+}
 .card:hover{ transform: translateY(-2px) }
 .card:active{ transform: translateY(0) scale(0.97) }
 .card .art{
@@ -477,9 +531,9 @@ body{
 }
 .card .art .label{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  font-family:'Instrument Serif', serif; font-size:28px; line-height:.95; color:#fff;
-  text-align:center; padding: 18px; letter-spacing:-.01em;
-  text-shadow: 0 2px 14px rgba(0,0,0,.3);
+  font-family: var(--font-display); font-size: 28px; line-height:.95; color:#fff;
+  text-align:center; padding: 16px; letter-spacing:-.01em;
+  text-shadow: 0 2px 14px rgba(0,0,0,.35);
 }
 .card .art .glow{ position:absolute; inset:0; background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,.4)) }
 .card .meta{ padding: 10px 2px 0 }
@@ -579,7 +633,10 @@ body{
 
 .scrub{ display:flex; gap:10px; align-items:center; width:100%; max-width:540px; font-size:11px; color:var(--fg-mute); font-variant-numeric: tabular-nums }
 .bar{ position:relative; flex:1; height:5px; border-radius:999px; background: rgba(255,255,255,.12); box-shadow: 0 1px 0 rgba(0,0,0,.25) inset; cursor:pointer }
-.bar .fill{ position:absolute; left:0; top:0; bottom:0; width:0%; border-radius:999px; background: linear-gradient(90deg, var(--accent), #ffb088); box-shadow: 0 0 10px rgba(255,93,143,.5) }
+/* Transport scrub bar fill — neutral white-to-cream gradient with a soft
+   white glow, so the music bar reads as material/glass rather than as a
+   coloured accent strip. */
+.bar .fill{ position:absolute; left:0; top:0; bottom:0; width:0%; border-radius:999px; background: linear-gradient(90deg, #e8ecf0, #ffffff); box-shadow: 0 0 10px rgba(255,255,255,.35) }
 .bar .knob{ position:absolute; top:50%; left:0%; width:13px; height:13px; border-radius:50%; background: linear-gradient(180deg,#fff,#cfd6dc); transform: translate(-50%,-50%); box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 -1px 0 rgba(0,0,0,.2) inset, 0 4px 10px rgba(0,0,0,.4); opacity:0; transition: opacity .15s }
 .bar:hover .knob{ opacity:1 }
 
@@ -646,7 +703,9 @@ body{
   .hero .portrait{ display:none }
   .hero h2{ font-size: 38px }
 
-  .rail{ grid-template-columns: repeat(2, 1fr); gap: 12px }
+  /* Rail is now a flex horizontal-scroll strip on every breakpoint;
+     just tighten gap and bleed for mobile main padding. */
+  .rail{ gap: 12px; margin: 0 -14px; padding-left: 14px; padding-right: 14px }
 
   .row{ grid-template-columns: 22px 40px minmax(0,1fr) 28px 28px; gap: 10px; padding: 6px }
   .row .plays, .row .more-c{ display:none }

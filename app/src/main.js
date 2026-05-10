@@ -20,23 +20,26 @@ import { mountTweaks } from './tweaks/mount.jsx';
 const PREMIUM_BLOCK = 'blocked from accessing the Web API';
 
 async function pickCatalog() {
-  if (!isAuthenticated()) return { catalog: itunesCatalog, source: 'itunes' };
+  if (!isAuthenticated()) return { catalog: itunesCatalog, source: 'itunes', authBlocked: null };
 
   // Probe Spotify with a cheap call (profile) — if Premium gating, scope
-  // mismatch, or anything else trips, we fall back to iTunes.
+  // mismatch, or anything else trips, we fall back to iTunes for the
+  // general catalog but record WHY so the library views can explain it.
   try {
     await spotifyCatalog.fetchUserProfile();
-    return { catalog: spotifyCatalog, source: 'spotify' };
+    return { catalog: spotifyCatalog, source: 'spotify', authBlocked: null };
   } catch (err) {
     const msg = String(err?.message || '');
     if (msg.includes(PREMIUM_BLOCK)) {
       console.warn('[Spotify] Premium required for Web API in dev mode — using iTunes fallback.');
-      // Clear the stale token so the title-bar button shows "Connect" again.
-      logout();
-    } else {
-      console.warn('[Spotify] API probe failed; using iTunes fallback:', err);
+      // Keep the tokens. The user is still authenticated; the Web API just
+      // won't talk to them. Logging them out here was misleading — they'd
+      // see the "Connect Spotify" prompt right after connecting, with no
+      // hint that Premium is the actual requirement.
+      return { catalog: itunesCatalog, source: 'itunes', authBlocked: 'premium' };
     }
-    return { catalog: itunesCatalog, source: 'itunes' };
+    console.warn('[Spotify] API probe failed; using iTunes fallback:', err);
+    return { catalog: itunesCatalog, source: 'itunes', authBlocked: 'error' };
   }
 }
 
@@ -55,9 +58,9 @@ async function boot() {
 
   const player = initPlayer({ audio: engine, view: fallbackView });
 
-  const { catalog, source } = await pickCatalog();
+  const { catalog, source, authBlocked } = await pickCatalog();
   const nav = createNavigator();
-  const views = createViews(catalog, nav.navigate);
+  const views = createViews(catalog, nav.navigate, { authBlocked });
 
   setupSignInButton();
   setupTweaksButton();
@@ -78,6 +81,11 @@ async function boot() {
       .fetchUserPlaylists(30)
       .then((playlists) => renderUserPlaylists(playlists, player, views, nav))
       .catch((err) => console.warn('Playlists fetch failed:', err));
+  } else if (authBlocked) {
+    // User connected Spotify but the Web API rejects them (Premium-only in
+    // dev mode, or transient error). Replace the stub demo playlists with
+    // a clearer message so the sidebar doesn't lie about "your playlists".
+    renderBlockedPlaylists(authBlocked);
   }
 
   mountTweaks(document.getElementById('tweaks-root'));
@@ -200,6 +208,32 @@ function hydrateUserProfile(profile) {
 }
 
 // ── Sidebar: user playlists ───────────────────────────────────────────────
+
+// Replaces the stub demo playlists in the sidebar with a "blocked" notice
+// when the user is connected to Spotify but the Web API won't talk to them
+// (Premium gating in dev mode, or any other probe failure).
+function renderBlockedPlaylists(reason) {
+  const section = document.getElementById('playlistSection');
+  if (!section) return;
+  const header = section.querySelector('h6');
+  section.innerHTML = '';
+  if (header) section.appendChild(header);
+
+  const note = document.createElement('div');
+  note.className = 'side-item';
+  note.style.color = 'var(--fg-mute)';
+  note.style.cursor = 'default';
+  note.style.flexDirection = 'column';
+  note.style.alignItems = 'flex-start';
+  note.style.gap = '4px';
+  note.style.lineHeight = '1.3';
+  note.innerHTML = reason === 'premium'
+    ? '<div style="font-size:12px;font-weight:600;color:var(--fg-dim)">Spotify Premium required</div>'
+      + '<div style="font-size:11px">Free accounts can\'t use the Web API in development mode.</div>'
+    : '<div style="font-size:12px;font-weight:600;color:var(--fg-dim)">Spotify unavailable</div>'
+      + '<div style="font-size:11px">Couldn\'t reach the Web API. Try again later.</div>';
+  section.appendChild(note);
+}
 
 function renderUserPlaylists(playlists, player, views, nav) {
   const section = document.getElementById('playlistSection');
