@@ -9,7 +9,10 @@
 //                            https://rss.applemarketingtools.com/api/v2
 
 const SEARCH_BASE = 'https://itunes.apple.com';
-const CHART_BASE = 'https://rss.applemarketingtools.com/api/v2';
+// Apple renamed this host; the old `rss.applemarketingtools.com` still
+// 301-redirects, but skipping the redirect makes Browse / Radio noticeably
+// snappier and avoids any chance of a CORS quirk on the redirect hop.
+const CHART_BASE = 'https://rss.marketingtools.apple.com/api/v2';
 
 export async function itunesSearch(path, params) {
   const url = new URL(SEARCH_BASE + path);

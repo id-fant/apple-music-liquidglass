@@ -11,11 +11,29 @@
 // Playlists) check whether the catalog implements them; if not (iTunes
 // mode), they render a "Connect Spotify" empty state instead of crashing.
 
+// While the For You view is on screen, rotate through the featured artists
+// every N ms so it reads as a showcase. Long enough for the user to actually
+// look at the artist; short enough to feel alive.
+const FEATURED_INTERVAL_MS = 14000;
+
 export function createViews(catalog, navigate) {
+  // Auto-rotation state. The token guards against a stale fetch (kicked off
+  // by the timer) landing after the user has navigated to a different view —
+  // every non-For-You loader bumps the token before doing its own work.
+  let featuredTimer = null;
+  let featuredToken = 0;
+
+  function cancelFeaturedRotation() {
+    if (featuredTimer) {
+      clearTimeout(featuredTimer);
+      featuredTimer = null;
+    }
+    featuredToken++;
+  }
 
   // ── Renderers (shared layouts) ─────────────────────────────────────────
 
-  function renderArtistView(player, data) {
+  function renderArtistView(player, data, opts = {}) {
     const a = data.artist;
     const followers = a.followers ? a.followers.toLocaleString() + ' followers' : '';
     const subtitle = a.genres
@@ -24,7 +42,7 @@ export function createViews(catalog, navigate) {
         : a.genres
       : followers;
 
-    player.setView({
+    const viewObj = {
       page: { crumb: 'For You', title: 'Today' },
       hero: {
         label: 'Featured Artist',
@@ -35,6 +53,12 @@ export function createViews(catalog, navigate) {
         showPortrait: true,
         primaryAction: { label: 'Play' },
         secondaryAction: { label: 'Following' },
+        // Click the hero to lock onto this artist's catalogue. Only set on
+        // For You (where the auto-rotation runs); on a stable artist page
+        // this is null so the hero isn't a link to itself.
+        onClick: opts.allowClick
+          ? () => navigate(() => loadArtist(a.id, player))
+          : null,
       },
       tracks: { title: 'Popular this month', items: data.tracks || [] },
       rail: data.albums?.length
@@ -45,7 +69,13 @@ export function createViews(catalog, navigate) {
             onItemClick: (album) => navigate(() => loadAlbum(album.id, player)),
           }
         : { title: '', items: [] },
-    });
+    };
+
+    if (opts.rotate) {
+      player.rotateView(viewObj);
+    } else {
+      player.setView(viewObj);
+    }
   }
 
   function renderLockedView(player, crumb, title, message) {
@@ -68,17 +98,28 @@ export function createViews(catalog, navigate) {
 
   // ── Loaders ────────────────────────────────────────────────────────────
 
-  async function loadForYou(player) {
+  async function loadForYou(player, opts = {}) {
+    // Each call gets its own token. If the user navigates away while the
+    // network call is in flight, cancelFeaturedRotation() will bump the
+    // token and we'll bail before rendering stale data.
+    const myToken = ++featuredToken;
     const data = await catalog.fetchPrimaryArtist();
-    renderArtistView(player, data);
+    if (myToken !== featuredToken) return;
+    renderArtistView(player, data, { allowClick: true, rotate: !!opts.rotate });
+    if (featuredTimer) clearTimeout(featuredTimer);
+    // Subsequent timer-driven calls use the rotate=true path, which plays
+    // the hero slide animation instead of a full-pane re-entrance.
+    featuredTimer = setTimeout(() => loadForYou(player, { rotate: true }), FEATURED_INTERVAL_MS);
   }
 
   async function loadArtist(artistId, player) {
+    cancelFeaturedRotation();
     const data = await catalog.getArtistFull(artistId);
     renderArtistView(player, data);
   }
 
   async function loadAlbum(albumId, player) {
+    cancelFeaturedRotation();
     const data = await catalog.getAlbumFull(albumId);
     const a = data.album;
     player.setView({
@@ -99,6 +140,7 @@ export function createViews(catalog, navigate) {
   }
 
   async function loadPlaylist(playlistId, player) {
+    cancelFeaturedRotation();
     if (!catalog.getPlaylistFull) {
       return renderLockedView(
         player,
@@ -127,6 +169,7 @@ export function createViews(catalog, navigate) {
   }
 
   async function loadBrowse(player) {
+    cancelFeaturedRotation();
     const albums = await catalog.fetchNewReleases(24);
     player.setView({
       page: { crumb: 'Listen Now', title: 'Browse' },
@@ -151,6 +194,7 @@ export function createViews(catalog, navigate) {
   }
 
   async function loadRadio(player) {
+    cancelFeaturedRotation();
     const tracks = await catalog.fetchTopTracks(20);
     const subtitle = catalog.fetchUserProfile
       ? 'Your most-played tracks in the past 4 weeks'
@@ -173,6 +217,7 @@ export function createViews(catalog, navigate) {
   }
 
   async function loadRecentlyAdded(player) {
+    cancelFeaturedRotation();
     if (!catalog.fetchSavedTracks) {
       return renderLockedView(
         player,
@@ -197,6 +242,7 @@ export function createViews(catalog, navigate) {
   }
 
   async function loadSongs(player) {
+    cancelFeaturedRotation();
     if (!catalog.fetchSavedTracks) {
       return renderLockedView(
         player,
@@ -221,6 +267,7 @@ export function createViews(catalog, navigate) {
   }
 
   async function loadLibraryAlbums(player) {
+    cancelFeaturedRotation();
     if (!catalog.fetchSavedAlbums) {
       return renderLockedView(
         player,
@@ -250,6 +297,7 @@ export function createViews(catalog, navigate) {
   }
 
   async function loadLibraryArtists(player) {
+    cancelFeaturedRotation();
     if (!catalog.fetchFollowedArtists) {
       return renderLockedView(
         player,

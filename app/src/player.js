@@ -177,6 +177,15 @@ export function initPlayer({ audio, view: initialView }) {
     const s = h.secondaryAction;
     els.heroSecondary.style.display = s ? '' : 'none';
     if (s) els.heroSecondary.textContent = s.label || '';
+
+    // Make the hero itself clickable when the view provides an onClick
+    // (used for the auto-rotating Featured Artist on For You — clicking
+    // the showcased artist locks onto their catalogue and stops the cycle).
+    if (h.onClick) {
+      els.hero.setAttribute('data-clickable', '');
+    } else {
+      els.hero.removeAttribute('data-clickable');
+    }
   }
 
   function renderTrackSection() {
@@ -252,19 +261,28 @@ export function initPlayer({ audio, view: initialView }) {
         </div>
       `;
       // Stagger entrance: each card animates in 30ms after the previous.
-      card.style.animation = 'cardIn .35s ease-out both';
+      card.classList.add('card-in');
       card.style.animationDelay = i * 30 + 'ms';
       els.rail.appendChild(card);
     });
   }
+
+  // Track which track we last rendered into the transport so we only fire
+  // the cross-fade when the song actually changes (not on every tick or
+  // play-state toggle).
+  let lastRenderedTrackKey = null;
 
   function renderNowPlaying() {
     const t = state.currentTrack;
     if (!t) {
       els.nowTitle.textContent = '—';
       els.nowArtist.textContent = '';
+      lastRenderedTrackKey = null;
       return;
     }
+    const key = t.id ?? `${t.title}|${t.album}`;
+    const trackChanged = key !== lastRenderedTrackKey;
+    lastRenderedTrackKey = key;
     els.nowTitle.textContent = t.title;
     // Prefer the track's own artist (set when loaded from view A) over the
     // current view's hero title, so the transport keeps showing the right
@@ -282,6 +300,17 @@ export function initPlayer({ audio, view: initialView }) {
     els.nowLike.classList.toggle('on', liked);
     els.nowLike.querySelector('svg').setAttribute('fill', liked ? 'currentColor' : 'none');
     els.totTime.textContent = t.duration;
+
+    // Replay the meta cross-fade only on actual song changes — keeps the
+    // transport calm during play/pause toggles or progress ticks.
+    if (trackChanged) {
+      const targets = [els.nowCover, els.miniCover, els.nowTitle, els.nowArtist, els.miniTitle, els.miniArtist];
+      for (const el of targets) {
+        el.classList.remove('meta-in');
+        void el.offsetWidth;
+        el.classList.add('meta-in');
+      }
+    }
   }
 
   function renderPlayIcon() {
@@ -311,6 +340,36 @@ export function initPlayer({ audio, view: initialView }) {
     renderNowPlaying();
     renderPlayIcon();
     renderProgress();
+    renderSegState();
+  }
+
+  // Segmented tab control (Overview / Songs / Discography). The active tab
+  // lives on `.main[data-tab=...]`; CSS hides the off-tab sections. Buttons
+  // are disabled when their corresponding section has no content, so the
+  // user can't click into an empty page.
+  function renderSegState() {
+    const seg = document.getElementById('seg');
+    const mainEl = document.querySelector('.main');
+    if (!seg || !mainEl) return;
+    const hasTracks = !!view.tracks?.items?.length;
+    const hasRail   = !!view.rail?.items?.length;
+    const enabled = {
+      overview: hasTracks || hasRail,
+      songs: hasTracks,
+      discography: hasRail,
+    };
+    // Default tab = overview when entering a view; if overview has no
+    // content but one of the other tabs does, fall through to that one.
+    let active = mainEl.dataset.tab || 'overview';
+    if (!enabled[active]) {
+      active = enabled.overview ? 'overview' : enabled.songs ? 'songs' : enabled.discography ? 'discography' : 'overview';
+    }
+    mainEl.dataset.tab = active;
+    seg.querySelectorAll('button').forEach((btn) => {
+      const tab = btn.dataset.tab;
+      btn.classList.toggle('on', tab === active);
+      btn.disabled = !enabled[tab];
+    });
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -382,6 +441,19 @@ export function initPlayer({ audio, view: initialView }) {
     state.liked.has(idx) ? state.liked.delete(idx) : state.liked.add(idx);
     renderTrackSection();
     renderNowPlaying();
+    // Pop the heart that was just toggled. renderTrackSection rebuilds the
+    // row, so we add the class to the freshly-rendered element afterwards.
+    const heart = els.trackList.querySelector(`[data-act="like"][data-idx="${idx}"]`);
+    if (heart) {
+      heart.classList.remove('heart-pop');
+      void heart.offsetWidth;
+      heart.classList.add('heart-pop');
+    }
+    if (idx === visibleIdx()) {
+      els.nowLike.classList.remove('heart-pop');
+      void els.nowLike.offsetWidth;
+      els.nowLike.classList.add('heart-pop');
+    }
   }
 
   // ── Wire-up ───────────────────────────────────────────────────────────────
@@ -403,6 +475,15 @@ export function initPlayer({ audio, view: initialView }) {
     } else {
       loadTrack(idx, { autoplay: true });
     }
+  });
+
+  // Seg tab clicks
+  document.getElementById('seg')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-tab]');
+    if (!btn || btn.disabled) return;
+    const mainEl = document.querySelector('.main');
+    if (mainEl) mainEl.dataset.tab = btn.dataset.tab;
+    renderSegState();
   });
 
   els.rail.addEventListener('click', (e) => {
@@ -431,6 +512,16 @@ export function initPlayer({ audio, view: initialView }) {
 
   els.heroSecondary.addEventListener('click', () => {
     view.hero?.secondaryAction?.onClick?.();
+  });
+
+  // Hero card click → view.hero.onClick (set when the page wants the whole
+  // banner to be a link; e.g. For You's auto-rotating artist). Buttons
+  // inside the hero stop propagation via their own handlers' actions, but
+  // we also explicitly skip clicks that originate on a button so Play /
+  // Following don't double-trigger this navigation.
+  els.hero.addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    view.hero?.onClick?.();
   });
 
   els.nowLike.addEventListener('click', () => {
@@ -544,8 +635,68 @@ export function initPlayer({ audio, view: initialView }) {
         audio.load(tracks[0]);
       }
       renderAll();
+      // Replay the view-enter animation. Toggling the class with a forced
+      // reflow between remove/add restarts the keyframes from frame zero,
+      // even if the previous run hadn't finished — important when the user
+      // taps tabs in quick succession. Also clear any leaving-animation
+      // class so the entering keyframe isn't fighting the leaving one.
+      const mainEl = document.querySelector('.main');
+      if (mainEl) {
+        // Reset the seg tab to overview on every navigation — renderAll
+        // already ran, but the tab might have been left on Songs from the
+        // previous view. Done before renderAll so renderSegState picks up
+        // the reset.
+        mainEl.dataset.tab = 'overview';
+        renderSegState();
+        mainEl.classList.remove('view-leaving');
+        mainEl.classList.remove('view-entering');
+        void mainEl.offsetWidth;
+        mainEl.classList.add('view-entering');
+      }
       // Scroll back to top so users see the new hero, not the previous bottom.
-      document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'smooth' });
+      mainEl?.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    // Same data update as setView, but with a hero-only slide animation
+    // instead of a full pane transition. Used by the For You auto-rotation
+    // so the artists feel like they're alternating in a carousel instead
+    // of the whole page re-entering. Falls back to setView() on the very
+    // first call (no prior hero to slide off).
+    rotateView(newView) {
+      if (!view?.hero || !els.hero) {
+        this.setView(newView);
+        return;
+      }
+      // Phase 1: slide current hero off to the left.
+      els.hero.classList.remove('hero-slide-in');
+      els.hero.classList.remove('hero-slide-out');
+      void els.hero.offsetWidth;
+      els.hero.classList.add('hero-slide-out');
+
+      // Phase 2 (after slide-out): swap state + DOM, then slide the new
+      // hero in from the right. Using setTimeout keyed to the slide-out
+      // duration; animationend would be more accurate but adds listener
+      // bookkeeping for a 200ms wait.
+      setTimeout(() => {
+        view = newView;
+        tracks = view.tracks?.items || [];
+        state.liked = new Set();
+        if (!state.playing && tracks.length) {
+          state.currentTrack = tracks[0];
+          state.queue = tracks;
+          state.progress = 0;
+          audio.load(tracks[0]);
+        }
+        renderAll();
+        const mainEl = document.querySelector('.main');
+        if (mainEl) {
+          mainEl.dataset.tab = 'overview';
+          renderSegState();
+        }
+        els.hero.classList.remove('hero-slide-out');
+        void els.hero.offsetWidth;
+        els.hero.classList.add('hero-slide-in');
+      }, 200);
     },
   };
 }

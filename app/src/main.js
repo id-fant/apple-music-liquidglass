@@ -129,9 +129,27 @@ function createNavigator() {
     current = thunk;
     future.length = 0; // any new navigation invalidates the redo stack
     update();
-    Promise.resolve(thunk()).catch((err) =>
-      console.error('View load failed during navigate:', err),
-    );
+    // Optimistic outgoing animation — fires before the (often network-bound)
+    // loader resolves. Without this, clicking an album reads as "nothing
+    // happened" until the request returns. See setView() for the handoff to
+    // .view-entering.
+    flashLeaving();
+    Promise.resolve(thunk()).catch((err) => handleLoaderError('navigate', err));
+  };
+
+  const flashLeaving = () => {
+    const main = document.querySelector('.main');
+    if (!main) return;
+    main.classList.remove('view-leaving');
+    void main.offsetWidth;
+    main.classList.add('view-leaving');
+  };
+
+  // Whenever a loader fails (network error, etc), strip the leaving class
+  // so the user isn't staring at a dimmed/blurred page with no recovery.
+  const handleLoaderError = (label, err) => {
+    console.error(`View load failed during ${label}:`, err);
+    document.querySelector('.main')?.classList.remove('view-leaving');
   };
 
   const back = () => {
@@ -139,9 +157,8 @@ function createNavigator() {
     if (current) future.push(current);
     current = history.pop();
     update();
-    Promise.resolve(current()).catch((err) =>
-      console.error('View load failed during back:', err),
-    );
+    flashLeaving();
+    Promise.resolve(current()).catch((err) => handleLoaderError('back', err));
   };
 
   const forward = () => {
@@ -149,9 +166,8 @@ function createNavigator() {
     if (current) history.push(current);
     current = future.pop();
     update();
-    Promise.resolve(current()).catch((err) =>
-      console.error('View load failed during forward:', err),
-    );
+    flashLeaving();
+    Promise.resolve(current()).catch((err) => handleLoaderError('forward', err));
   };
 
   return { navigate, back, forward, update };

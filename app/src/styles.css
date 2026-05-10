@@ -17,6 +17,13 @@
   --radius-md: 12px;
   --radius-sm: 9px;
 
+  /* Motion — strong custom curves; built-in CSS easings lack the punch
+     that makes UI feel intentional. Stay under 300ms for ordinary UI. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 140ms;
+  --dur-snap: 220ms;
+
   --shell-shadow:
     0 1px 0 rgba(255,255,255,0.45) inset,
     0 -1px 0 rgba(0,0,0,0.18) inset,
@@ -151,9 +158,11 @@ body{
   width:28px; height:28px; border-radius:8px;
   display:grid; place-items:center;
   color:var(--fg-dim); border:1px solid transparent;
-  background:transparent; cursor:pointer; transition: all .15s;
+  background:transparent; cursor:pointer;
+  transition: background var(--dur-press) ease, color var(--dur-press) ease, transform var(--dur-press) var(--ease-out-strong);
 }
 .ibtn:hover{ background: rgba(255,255,255,.08); color: var(--fg) }
+.ibtn:active{ transform: scale(0.94) }
 .ibtn:disabled{ opacity: .35; pointer-events: none }
 
 .global-search{
@@ -169,7 +178,9 @@ body{
   flex:1; background:transparent; border:0; outline:0; color:var(--fg); font-family:inherit; font-size:12.5px;
 }
 
-/* Search results dropdown */
+/* Search results dropdown — origin-aware open/close (scales from the top
+   center, where it's anchored to the search input). Visibility is delayed
+   on close so the close animation can play before the panel goes away. */
 .search-results{
   position:absolute; left:0; right:0; top:100%;
   margin-top:8px; padding:6px;
@@ -181,9 +192,24 @@ body{
   box-shadow: 0 12px 40px rgba(0,0,0,.5);
   z-index: 60;
   max-height: 380px; overflow-y:auto;
-  display:none;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.985);
+  transform-origin: top center;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 180ms var(--ease-out-strong),
+              transform 200ms var(--ease-out-strong),
+              visibility 0s linear 200ms;
 }
-.search-results.open{ display:block }
+.search-results.open{
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 180ms var(--ease-out-strong),
+              transform 200ms var(--ease-out-strong),
+              visibility 0s;
+}
 .search-results .item{
   display:flex; align-items:center; gap:10px;
   padding:6px 8px; border-radius:8px; cursor:pointer;
@@ -225,10 +251,11 @@ body{
   display:flex; align-items:center; gap:10px;
   padding: 7px 10px; border-radius: 8px;
   cursor:pointer; color: var(--fg-dim); font-size: 13.5px; font-weight: 500;
-  transition: all .15s;
+  transition: background var(--dur-press) ease, color var(--dur-press) ease, transform var(--dur-press) var(--ease-out-strong);
 }
 .side-item svg{ width:16px; height:16px; flex-shrink:0; color: var(--accent) }
 .side-item:hover{ background: rgba(255,255,255,.06); color:var(--fg) }
+.side-item:active{ transform: scale(0.985) }
 .side-item.on{
   background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.06));
   color: var(--fg);
@@ -249,6 +276,28 @@ body{
   padding: 18px 22px 22px;
   position:relative; z-index:1;
 }
+/* View-switch transitions. Two phases:
+   1. .view-leaving — fired the moment a navigate() is called, BEFORE the
+      network fetch completes. Gives instant feedback that the click was
+      received; if the fetch is slow, the user holds at the dimmed state.
+   2. .view-entering — fired when setView lands the new content. Replaces
+      .view-leaving and animates the new pane in from below+blurred.
+   The two keyframes meet at near-identical states, so the handoff doesn't
+   flash. */
+.main.view-leaving{
+  animation: view-out 200ms var(--ease-out-strong) both;
+}
+.main.view-entering{
+  animation: view-in var(--dur-snap) var(--ease-out-strong) both;
+}
+@keyframes view-out{
+  from{ opacity: 1;   transform: translateY(0);   filter: blur(0);   }
+  to  { opacity: 0.4; transform: translateY(-3px); filter: blur(3px); }
+}
+@keyframes view-in{
+  from{ opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  to  { opacity: 1; transform: translateY(0);    filter: blur(0);   }
+}
 .main::-webkit-scrollbar{ width:8px } .main::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:4px }
 
 /* Page header */
@@ -260,6 +309,18 @@ body{
 .seg{ display:inline-flex; padding:3px; border-radius:999px; background: rgba(0,0,0,.22); border:1px solid rgba(255,255,255,.08) }
 .seg button{ padding:5px 12px; font-size:11.5px; font-weight:500; border:0; background:transparent; color:var(--fg-dim); border-radius:999px; cursor:pointer; font-family:inherit }
 .seg button.on{ background: linear-gradient(180deg, rgba(255,255,255,.4), rgba(255,255,255,.12)); color:#0a1018; font-weight:600; box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 -1px 0 rgba(0,0,0,.2) inset }
+.seg button{ transition: background var(--dur-press) ease, color var(--dur-press) ease, transform var(--dur-press) var(--ease-out-strong) }
+.seg button:hover:not(.on):not(:disabled){ background: rgba(255,255,255,.08); color: var(--fg) }
+.seg button:active:not(:disabled){ transform: scale(0.96) }
+.seg button:disabled{ opacity: .35; cursor: default }
+
+/* Seg-controlled section visibility. Overrides the inline display set by
+   the renderers (hence !important). The renderers still own "is the
+   section empty" — these rules only filter by the active tab. */
+.main[data-tab="songs"] #railSectionTitle,
+.main[data-tab="songs"] #rail{ display: none !important }
+.main[data-tab="discography"] #trackSectionTitle,
+.main[data-tab="discography"] #trackList{ display: none !important }
 
 /* Hero artist banner */
 .hero{
@@ -272,6 +333,30 @@ body{
   box-shadow: 0 24px 48px -20px rgba(0,0,0,.45);
   display:grid;
   grid-template-columns: minmax(0,1fr) 240px;
+  /* Hover lift only when clickable (auto-cycling featured artist). */
+  transition: transform var(--dur-press) var(--ease-out-strong),
+              box-shadow var(--dur-press) ease;
+}
+.hero[data-clickable]{ cursor: pointer }
+.hero[data-clickable]:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 28px 56px -18px rgba(0,0,0,.55);
+}
+.hero[data-clickable]:active{ transform: translateY(0) scale(0.995) }
+
+/* Featured-artist auto-rotation: hero slides off to the left, content
+   swaps under the cover of the slide, new hero slides in from the right.
+   Triggered exclusively from player.rotateView(); regular setView() uses
+   the normal view-in animation on .main instead. */
+.hero.hero-slide-out{ animation: heroSlideOut 200ms var(--ease-out-strong) both }
+.hero.hero-slide-in { animation: heroSlideIn  280ms var(--ease-out-strong) both }
+@keyframes heroSlideOut{
+  from{ transform: translateX(0);    opacity: 1; filter: blur(0)   }
+  to  { transform: translateX(-32px); opacity: 0; filter: blur(4px) }
+}
+@keyframes heroSlideIn{
+  from{ transform: translateX(32px); opacity: 0; filter: blur(4px) }
+  to  { transform: translateX(0);    opacity: 1; filter: blur(0)   }
 }
 .hero .text{ padding: 22px 26px; min-width:0; display:flex; flex-direction:column; justify-content:flex-end }
 .hero .verified{
@@ -282,9 +367,14 @@ body{
 }
 .hero h2{
   font-family:'Instrument Serif', serif; font-weight:400;
-  font-size: clamp(38px, 4.4vw, 56px); line-height:.95; margin:0 0 8px;
+  font-size: clamp(30px, 4vw, 52px); line-height:.95; margin:0 0 8px;
   color:#fff; letter-spacing:-.01em;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  /* Allow long artist names to wrap to a second line instead of being
+     cut off with an ellipsis. The hero's vertical room is generous
+     enough to absorb two lines at this size. */
+  white-space: normal;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
   text-shadow: 0 2px 30px rgba(0,0,0,.25);
 }
 .hero .stat{ font-size:12.5px; color:rgba(255,255,255,.85); margin-bottom: 14px }
@@ -292,9 +382,10 @@ body{
 .btn{
   border:0; cursor:pointer; font-family:inherit; font-weight:600; font-size:13px;
   padding:9px 18px; border-radius:999px; display:inline-flex; gap:8px; align-items:center;
-  transition: transform .15s;
+  transition: transform var(--dur-press) var(--ease-out-strong), background var(--dur-press) ease;
 }
 .btn:hover{ transform: translateY(-1px) }
+.btn:active{ transform: translateY(0) scale(0.97) }
 .btn-primary{
   background: linear-gradient(180deg, #ffffff 0%, #d8e0e8 100%);
   color:#0a1018;
@@ -376,8 +467,9 @@ body{
 .rail{
   display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
 }
-.card{ cursor:pointer; transition: transform .25s }
+.card{ cursor:pointer; transition: transform var(--dur-press) var(--ease-out-strong) }
 .card:hover{ transform: translateY(-2px) }
+.card:active{ transform: translateY(0) scale(0.97) }
 .card .art{
   aspect-ratio:1/1; border-radius: 8px; position:relative; overflow:hidden;
   box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 -1px 0 rgba(0,0,0,.2) inset, 0 14px 24px -12px rgba(0,0,0,.5);
@@ -415,9 +507,28 @@ body{
 .minibar .cv.has-art::after{ display: none }
 
 /* Rail entrance — staggered via inline animation-delay set in player.js. */
+.card-in{ animation: cardIn 350ms var(--ease-out-strong) both }
 @keyframes cardIn{
-  from{ opacity:0; transform: translateY(8px) scale(.985) }
-  to{   opacity:1; transform: translateY(0) scale(1) }
+  from{ opacity:0; transform: translateY(8px) scale(.985); filter: blur(2px) }
+  to{   opacity:1; transform: translateY(0) scale(1); filter: blur(0) }
+}
+
+/* Now-playing transport: when the current track changes, the cover, title,
+   and artist briefly blur-fade in so the swap doesn't read as two distinct
+   objects flickering past each other. */
+.meta-in{ animation: metaIn 240ms var(--ease-out-strong) both }
+@keyframes metaIn{
+  from{ opacity: 0; transform: translateY(3px); filter: blur(2px) }
+  to  { opacity: 1; transform: translateY(0);  filter: blur(0)   }
+}
+
+/* Heart pop — a small overshoot when a track is liked. Frequent enough to
+   stay subtle (no bounce loop), satisfying enough to feel like a reaction. */
+.heart-pop{ animation: heartPop 360ms var(--ease-out-strong) }
+@keyframes heartPop{
+  0%   { transform: scale(1) }
+  35%  { transform: scale(1.25) }
+  100% { transform: scale(1) }
 }
 
 /* --- Transport --- */
@@ -451,9 +562,11 @@ body{
 .cbtn{
   width:34px; height:34px; border-radius:50%; border:0;
   background:transparent; color:var(--fg-dim); cursor:pointer;
-  display:grid; place-items:center; transition:.15s;
+  display:grid; place-items:center;
+  transition: background var(--dur-press) ease, color var(--dur-press) ease, transform var(--dur-press) var(--ease-out-strong);
 }
 .cbtn:hover{ color:var(--fg); background: rgba(255,255,255,.08) }
+.cbtn:active{ transform: scale(0.92) }
 .cbtn.on{ color: var(--accent) }
 .play{
   width:44px; height:44px; border-radius:50%;
@@ -461,7 +574,8 @@ body{
   box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 -2px 4px rgba(0,0,0,.18) inset, 0 0 0 4px rgba(255,255,255,.08), 0 8px 22px -6px rgba(0,0,0,.55);
   transition: transform .15s;
 }
-.play:hover{ transform: scale(1.05) } .play:active{ transform: scale(.96) }
+.play{ transition: transform var(--dur-press) var(--ease-out-strong), box-shadow var(--dur-press) ease }
+.play:hover{ transform: scale(1.05) } .play:active{ transform: scale(.94) }
 
 .scrub{ display:flex; gap:10px; align-items:center; width:100%; max-width:540px; font-size:11px; color:var(--fg-mute); font-variant-numeric: tabular-nums }
 .bar{ position:relative; flex:1; height:5px; border-radius:999px; background: rgba(255,255,255,.12); box-shadow: 0 1px 0 rgba(0,0,0,.25) inset; cursor:pointer }
