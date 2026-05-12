@@ -8,11 +8,21 @@
 //      songs/albums charts (used to populate Browse and Radio).
 //                            https://rss.applemarketingtools.com/api/v2
 
-const SEARCH_BASE = 'https://itunes.apple.com';
-// Apple renamed this host; the old `rss.applemarketingtools.com` still
-// 301-redirects, but skipping the redirect makes Browse / Radio noticeably
-// snappier and avoids any chance of a CORS quirk on the redirect hop.
-const CHART_BASE = 'https://rss.marketingtools.apple.com/api/v2';
+// In dev we hit Apple's APIs directly — both happen to allow CORS from
+// localhost. In production we proxy through Vercel rewrites (see
+// vercel.json) because:
+//   - rss.marketingtools.apple.com sends no CORS header at all
+//   - itunes.apple.com caches a stale CORS header (often pinned to a dev
+//     origin like 127.0.0.1:5173) and refuses other origins
+// Routing same-origin sidesteps both problems. Vite replaces
+// import.meta.env.PROD at build time, so this branch costs nothing at
+// runtime.
+const SEARCH_BASE = import.meta.env.PROD
+  ? `${window.location.origin}/api/itunes`
+  : 'https://itunes.apple.com';
+const CHART_BASE = import.meta.env.PROD
+  ? `${window.location.origin}/api/applecharts`
+  : 'https://rss.marketingtools.apple.com/api/v2';
 
 export async function itunesSearch(path, params) {
   const url = new URL(SEARCH_BASE + path);
