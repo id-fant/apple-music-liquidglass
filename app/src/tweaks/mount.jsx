@@ -5,7 +5,6 @@ import {
   TweakSection,
   TweakSlider,
   TweakSelect,
-  TweakColor,
 } from './controls.jsx';
 import {
   applyTweaks,
@@ -31,7 +30,6 @@ function App() {
       <TweakSection label="Glass material">
         <TweakSlider label="Blur"     value={t.blur}     onChange={(v) => set('blur', v)}     min={6}   max={60}  step={1}    unit="px" />
         <TweakSlider label="Saturate" value={t.saturate} onChange={(v) => set('saturate', v)} min={0.6} max={2.4} step={0.05} />
-        <TweakSlider label="Tint"     value={t.tint}     onChange={(v) => set('tint', v)}     min={0}   max={0.4} step={0.01} />
         <TweakSlider label="Edge"     value={t.stroke}   onChange={(v) => set('stroke', v)}   min={0}   max={0.6} step={0.02} />
       </TweakSection>
       <TweakSection label="Backdrop">
@@ -46,12 +44,6 @@ function App() {
             { value: 'midnight', label: 'Midnight' },
             { value: 'cream',    label: 'Cream' },
           ]}
-        />
-        <TweakColor
-          label="Accent"
-          value={t.accent}
-          onChange={(v) => set('accent', v)}
-          options={['#ff5d8f', '#6ee7ff', '#7cf2a5', '#ffd166', '#b388ff']}
         />
       </TweakSection>
     </TweaksPanel>

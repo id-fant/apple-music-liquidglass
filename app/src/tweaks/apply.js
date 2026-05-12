@@ -10,22 +10,27 @@ export const PALETTES = {
   cream:    ['#ffd166', '#ffe29a', '#ffba6b', '#ff9aa2', '#ffc4d6'],
 };
 
+// Locked values that are NOT user-tweakable. Any prior tint/accent in
+// localStorage from older Tweaks-panel versions is overridden by these —
+// the panel no longer exposes either control.
+const FIXED_TINT = 0;
+const FIXED_ACCENT = '#ff5d8f';
+
 export const DEFAULTS = {
   palette: 'aurora',
   blur: 30,
   saturate: 1.7,
-  tint: 0.10,
   stroke: 0.16,
-  accent: '#ff5d8f',
 };
 
 export function applyTweaks(t) {
   const root = document.documentElement;
   root.style.setProperty('--glass-blur', t.blur + 'px');
   root.style.setProperty('--glass-saturate', t.saturate);
-  root.style.setProperty('--glass-tint', `rgba(255,255,255,${t.tint})`);
+  // Tint and accent are locked — ignore whatever might be in `t`.
+  root.style.setProperty('--glass-tint', `rgba(255,255,255,${FIXED_TINT})`);
   root.style.setProperty('--glass-stroke-soft', `rgba(255,255,255,${t.stroke})`);
-  root.style.setProperty('--accent', t.accent);
+  root.style.setProperty('--accent', FIXED_ACCENT);
 
   const colors = PALETTES[t.palette] || PALETTES.aurora;
   document.querySelectorAll('.blob').forEach((b, i) => {
