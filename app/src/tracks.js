@@ -24,7 +24,7 @@ export const COVERS = [
 // audio-engine.js to drive MusicKit directly, or set `audio` to MusicKit
 // stream URLs returned from the library/search APIs.
 export const TRACKS = [
-  { id: 'hover-years',          n:1, title:'Hover Years',          album:'Hover Years — EP', plays:'12,481,920', duration:'3:48', cover:1, audio:'/audio/hover-years.mp3.mp3' },
+  { id: 'hover-years',          n:1, title:'Hover Years',          album:'Hover Years — EP', plays:'12,481,920', duration:'3:48', cover:1, audio:'' },
   { id: 'coastline-in-reverse', n:2, title:'Coastline in Reverse', album:'Salt & Glass',     plays:'8,703,114',  duration:'6:09', cover:0, audio:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
   { id: 'margin-of-error',      n:3, title:'Margin of Error',      album:'Salt & Glass',     plays:'6,219,008',  duration:'7:00', cover:4, audio:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
   { id: 'almost-a-postcard',    n:4, title:'Almost a Postcard',    album:'Linen Sunday',     plays:'4,998,302',  duration:'7:43', cover:2, audio:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3' },

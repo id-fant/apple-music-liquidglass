@@ -14,10 +14,18 @@ import { initPlayer, staticArtistView } from './player.js';
 import { createViews } from './views.js';
 import { mountTweaks } from './tweaks/mount.jsx';
 
-// Spotify's development-mode error message when the developer doesn't have
-// Premium. We sniff for it so we can auto-fall-back to iTunes instead of
-// leaving the user stuck on a broken authenticated state.
-const PREMIUM_BLOCK = 'blocked from accessing the Web API';
+// Spotify's development-mode error messages when the app owner doesn't have
+// Premium. Spotify has rotated this wording at least twice — match both
+// known variants (and any future "premium…required" text) by lowercased
+// substring so we can auto-fall-back to iTunes with the right messaging.
+const PREMIUM_BLOCK_PATTERNS = [
+  'blocked from accessing the web api',
+  'premium subscription required',
+];
+function isPremiumBlock(msg) {
+  const lc = String(msg || '').toLowerCase();
+  return PREMIUM_BLOCK_PATTERNS.some((p) => lc.includes(p));
+}
 
 async function pickCatalog() {
   if (!isAuthenticated()) return { catalog: itunesCatalog, source: 'itunes', authBlocked: null };
@@ -30,7 +38,7 @@ async function pickCatalog() {
     return { catalog: spotifyCatalog, source: 'spotify', authBlocked: null };
   } catch (err) {
     const msg = String(err?.message || '');
-    if (msg.includes(PREMIUM_BLOCK)) {
+    if (isPremiumBlock(msg)) {
       console.warn('[Spotify] Premium required for Web API in dev mode — using iTunes fallback.');
       // Keep the tokens. The user is still authenticated; the Web API just
       // won't talk to them. Logging them out here was misleading — they'd
