@@ -46,12 +46,19 @@ function shapeTrack(s, i = 0) {
 }
 
 function shapeAlbum(c) {
+  // iTunes appends " - Single" / " - EP" to the release name. Detect the
+  // suffix to set a meaningful `type`, and strip it so the visible name is
+  // clean (the type drives section placement separately).
+  const rawName = c.collectionName || c.name || '';
+  const isSingle = / - Single$/i.test(rawName);
+  const isEP = / - EP$/i.test(rawName);
+  const name = rawName.replace(/ - (Single|EP)$/i, '');
   return {
     id: String(c.collectionId || c.id || ''),
-    name: c.collectionName || c.name || '',
+    name,
     artist: c.artistName || '',
     year: c.releaseDate?.slice(0, 4) || '',
-    type: c.collectionType || 'Album',
+    type: isSingle ? 'single' : isEP ? 'ep' : 'album',
     artwork: bigArtwork(c.artworkUrl100, 400),
   };
 }
@@ -82,27 +89,31 @@ export async function searchArtists(query, limit = 8) {
 
 export async function getArtistFull(artistId) {
   // Two parallel lookups — songs entity returns the artist + top tracks,
-  // album entity returns the artist + their albums.
+  // album entity returns the artist + their releases (we ask for more so
+  // there's room for albums AND singles after splitting).
   const [songsRes, albumsRes] = await Promise.all([
     itunesSearch('/lookup', { id: artistId, entity: 'song', limit: 11 }),
-    itunesSearch('/lookup', { id: artistId, entity: 'album', limit: 13 }),
+    itunesSearch('/lookup', { id: artistId, entity: 'album', limit: 26 }),
   ]);
 
   const artistObj = songsRes.results?.find((r) => r.wrapperType === 'artist') || {};
   const songs = (songsRes.results || []).filter((r) => r.kind === 'song');
-  const albums = (albumsRes.results || []).filter(
-    (r) => r.wrapperType === 'collection' || r.collectionType === 'Album',
-  );
+  const releases = (albumsRes.results || [])
+    .filter((r) => r.wrapperType === 'collection' || r.collectionType === 'Album')
+    .map(shapeAlbum);
 
-  // Artist photo stand-in: their first album's cover. Reads as "an image of
-  // the artist" in the hero — much better than a blank gradient.
-  const fallback = bigArtwork(albums[0]?.artworkUrl100, 600);
+  const albums = releases.filter((r) => r.type !== 'single');
+  const singles = releases.filter((r) => r.type === 'single');
+
+  // Artist photo stand-in: their first release's cover.
+  const fallback = releases[0]?.artwork || null;
 
   return {
     artist: shapeArtist(artistObj, fallback),
     bgColor: null,
     tracks: songs.slice(0, 10).map((s, i) => shapeTrack(s, i)),
-    albums: albums.slice(0, 12).map(shapeAlbum),
+    albums: albums.slice(0, 12),
+    singles: singles.slice(0, 12),
   };
 }
 

@@ -60,7 +60,7 @@ async function boot() {
 
   const { catalog, source, authBlocked } = await pickCatalog();
   const nav = createNavigator();
-  const views = createViews(catalog, nav.navigate, { authBlocked });
+  const views = createViews(catalog, nav.navigate, { authBlocked, source });
 
   setupSignInButton();
   setupTweaksButton();
@@ -83,8 +83,11 @@ async function boot() {
       .catch((err) => console.warn('Playlists fetch failed:', err));
   } else if (authBlocked) {
     // User connected Spotify but the Web API rejects them (Premium-only in
-    // dev mode, or transient error). Replace the stub demo playlists with
-    // a clearer message so the sidebar doesn't lie about "your playlists".
+    // dev mode, or transient error). We can't fetch /v1/me to get their
+    // real name/photo, so replace the demo "Elena" placeholder with an
+    // honest "Spotify (Premium required)" status instead of leaving the
+    // stub identity in place.
+    hydrateBlockedProfile(authBlocked);
     renderBlockedPlaylists(authBlocked);
   }
 
@@ -188,6 +191,26 @@ function setupNavButtons(nav) {
 }
 
 // ── User profile in title bar ─────────────────────────────────────────────
+
+// Title-bar fallback for when the user IS authenticated to Spotify but the
+// Web API won't talk to them (Premium-only in dev mode, scope mismatch,
+// transient error). We have no profile data to show, but we shouldn't lie
+// by leaving the "Elena" demo placeholder either.
+function hydrateBlockedProfile(reason) {
+  const av = document.getElementById('userAv');
+  const nm = document.getElementById('userNm');
+  const pill = document.getElementById('userPill');
+  if (pill) pill.title = reason === 'premium'
+    ? 'Spotify connected — Premium required for Web API in development mode'
+    : 'Spotify connected — Web API not reachable';
+  if (nm) nm.textContent = reason === 'premium' ? 'Premium required' : 'API offline';
+  if (av) {
+    // Spotify green disc with a generic glyph; clear any prior bg image.
+    av.style.background = '#1ed760';
+    av.style.color = '#0a1018';
+    av.textContent = '♪';
+  }
+}
 
 function hydrateUserProfile(profile) {
   const av = document.getElementById('userAv');

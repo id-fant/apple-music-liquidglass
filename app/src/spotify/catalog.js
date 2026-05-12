@@ -120,11 +120,19 @@ export async function fetchUserTopTracks(limit = 20, time_range = 'short_term') 
 // ── Artist detail ──────────────────────────────────────────────────────────
 
 export async function getArtistFull(artistId) {
-  const [artist, top, albums] = await Promise.all([
+  // Separate fetches for albums and singles so we get a meaningful sample
+  // of each (one shared call with limit:12 would skew to whichever's more
+  // recent). Spotify's album_type already distinguishes them.
+  const [artist, top, albums, singles] = await Promise.all([
     spotifyFetch(`/v1/artists/${artistId}`),
     spotifyFetch(`/v1/artists/${artistId}/top-tracks`, { market: MARKET }),
     spotifyFetch(`/v1/artists/${artistId}/albums`, {
-      include_groups: 'album,single',
+      include_groups: 'album',
+      limit: 12,
+      market: MARKET,
+    }),
+    spotifyFetch(`/v1/artists/${artistId}/albums`, {
+      include_groups: 'single',
       limit: 12,
       market: MARKET,
     }),
@@ -135,6 +143,7 @@ export async function getArtistFull(artistId) {
     bgColor: null,
     tracks: (top.tracks || []).map(shapeTrack),
     albums: (albums.items || []).map(shapeAlbum),
+    singles: (singles.items || []).map(shapeAlbum),
   };
 }
 
@@ -197,33 +206,28 @@ export async function fetchNewReleases(limit = 24) {
 
 // ── Unified-interface aliases (mirrors src/itunes/catalog.js) ──────────────
 
-// Cache of the user's top artists used to drive the auto-rotating For You
-// banner. Each fetchPrimaryArtist() call advances through the list, so the
-// 14s rotation cycles through the artists Spotify currently highlights for
-// this user — same set the user sees in their Spotify "Made For You" stats.
-let topArtistsCache = null;
-let topArtistsIdx = 0;
+// User's top artist for the For You banner. Cached so revisits don't
+// re-hit /v1/me/top/artists. We deliberately do NOT rotate — the showcased
+// artist is Spotify's pick for this user and should stay consistent.
+let topArtistCache = null;
 
-async function getRotationArtists() {
-  if (topArtistsCache) return topArtistsCache;
-  const short = await fetchUserTopArtists(5, 'short_term');
-  if (short.length) { topArtistsCache = short; return short; }
-  const medium = await fetchUserTopArtists(5, 'medium_term');
-  if (medium.length) { topArtistsCache = medium; return medium; }
-  topArtistsCache = [];
-  return topArtistsCache;
+async function getTopArtist() {
+  if (topArtistCache) return topArtistCache;
+  const short = await fetchUserTopArtists(1, 'short_term');
+  if (short.length) { topArtistCache = short[0]; return topArtistCache; }
+  const medium = await fetchUserTopArtists(1, 'medium_term');
+  if (medium.length) { topArtistCache = medium[0]; return topArtistCache; }
+  return null;
 }
 
 export async function fetchPrimaryArtist() {
-  const list = await getRotationArtists();
-  if (!list.length) {
+  const top = await getTopArtist();
+  if (!top) {
     // No listening history — fall back to the static rotation so the page
     // still has something to show.
     return findArtistByName(nextFeaturedArtist());
   }
-  const a = list[topArtistsIdx % list.length];
-  topArtistsIdx++;
-  return getArtistFull(a.id);
+  return getArtistFull(top.id);
 }
 
 // Radio view source. Spotify deprecated /v1/recommendations for new apps,

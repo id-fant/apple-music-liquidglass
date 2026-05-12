@@ -23,6 +23,12 @@ export function createViews(catalog, navigate, opts = {}) {
   // "Connect Spotify" and "Spotify Premium required" messaging.
   const authBlocked = opts.authBlocked || null;
 
+  // `source` controls the For You auto-rotation: only iTunes mode cycles
+  // through chart leaders. Spotify-authed sessions show the user's #1
+  // top artist and stay there — no chart-style showcase needed when the
+  // page already represents a specific personal favourite.
+  const source = opts.source || 'itunes';
+
   // Auto-rotation state. The token guards against a stale fetch (kicked off
   // by the timer) landing after the user has navigated to a different view —
   // every non-For-You loader bumps the token before doing its own work.
@@ -48,10 +54,20 @@ export function createViews(catalog, navigate, opts = {}) {
         : a.genres
       : followers;
 
+    // 'featured' = For You landing (auto-cycling showcase, clickable hero).
+    // 'artist'   = dedicated artist page reached from a click — visually
+    //              grander (taller hero, bigger title) so the user feels
+    //              they navigated into the artist rather than re-rendering
+    //              the same For You page.
+    const isArtist = opts.context === 'artist';
+
     const viewObj = {
-      page: { crumb: 'For You', title: 'Today' },
+      page: isArtist
+        ? { crumb: 'Artist', title: a.name }
+        : { crumb: 'For You', title: 'Today' },
       hero: {
-        label: 'Featured Artist',
+        label: isArtist ? 'Verified Artist' : 'Featured Artist',
+        variant: isArtist ? 'artist' : 'featured',
         title: a.name,
         subtitle,
         artwork: a.artwork,
@@ -75,6 +91,14 @@ export function createViews(catalog, navigate, opts = {}) {
             onItemClick: (album) => navigate(() => loadAlbum(album.id, player)),
           }
         : { title: '', items: [] },
+      secondaryRail: data.singles?.length
+        ? {
+            title: 'Singles',
+            variant: 'album',
+            items: data.singles,
+            onItemClick: (album) => navigate(() => loadAlbum(album.id, player)),
+          }
+        : null,
     };
 
     if (opts.rotate) {
@@ -126,17 +150,19 @@ export function createViews(catalog, navigate, opts = {}) {
     const myToken = ++featuredToken;
     const data = await catalog.fetchPrimaryArtist();
     if (myToken !== featuredToken) return;
-    renderArtistView(player, data, { allowClick: true, rotate: !!opts.rotate });
+    renderArtistView(player, data, { context: 'featured', allowClick: true, rotate: !!opts.rotate });
     if (featuredTimer) clearTimeout(featuredTimer);
-    // Subsequent timer-driven calls use the rotate=true path, which plays
-    // the hero slide animation instead of a full-pane re-entrance.
-    featuredTimer = setTimeout(() => loadForYou(player, { rotate: true }), FEATURED_INTERVAL_MS);
+    // Auto-cycle ONLY in iTunes mode. Spotify users see their #1 top
+    // artist (already chosen specifically for them) and that stays put.
+    if (source !== 'spotify') {
+      featuredTimer = setTimeout(() => loadForYou(player, { rotate: true }), FEATURED_INTERVAL_MS);
+    }
   }
 
   async function loadArtist(artistId, player) {
     cancelFeaturedRotation();
     const data = await catalog.getArtistFull(artistId);
-    renderArtistView(player, data);
+    renderArtistView(player, data, { context: 'artist' });
   }
 
   async function loadAlbum(albumId, player) {

@@ -64,12 +64,26 @@ export function initPlayer({ audio, view: initialView }) {
   let view = initialView;
   let tracks = view.tracks?.items || [];
 
+  // Likes are keyed by track id (so they survive view changes and reloads),
+  // backed by localStorage. The Set holds whatever string ids the catalogs
+  // return — iTunes trackId or Spotify track id — both stable per song.
+  const LIKES_KEY = 'lumen.likes';
+  function loadLikes() {
+    try {
+      const raw = localStorage.getItem(LIKES_KEY);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  }
+  function persistLikes() {
+    try { localStorage.setItem(LIKES_KEY, JSON.stringify([...state.liked])); } catch {}
+  }
+
   const state = {
     playing: false,
     currentTrack: null,   // the actual track object playing — persists across view changes
     queue: [],            // track list captured when playback started; next/prev advance through it
     progress: 0,
-    liked: new Set(),
+    liked: loadLikes(),
     shuffle: false,
     repeat: false,
     volume: 0.6,
@@ -100,6 +114,9 @@ export function initPlayer({ audio, view: initialView }) {
     railSectionTitle: $('railSectionTitle'),
     railSectionH3: $('railSectionH3'),
     rail: $('rail'),
+    singlesRailSectionTitle: $('singlesRailSectionTitle'),
+    singlesRailSectionH3: $('singlesRailSectionH3'),
+    singlesRail: $('singlesRail'),
     nowTitle: $('nowTitle'),
     nowArtist: $('nowArtist'),
     nowCover: $('nowCover'),
@@ -186,6 +203,12 @@ export function initPlayer({ audio, view: initialView }) {
     } else {
       els.hero.removeAttribute('data-clickable');
     }
+
+    // Variant class — drives the artist-page-specific CSS treatment
+    // (taller hero, larger title) so a dedicated artist view reads as a
+    // different page than the For You landing.
+    els.hero.classList.toggle('hero-artist', h.variant === 'artist');
+    els.hero.classList.toggle('hero-featured', h.variant === 'featured');
   }
 
   function renderTrackSection() {
@@ -204,7 +227,7 @@ export function initPlayer({ audio, view: initialView }) {
     tracks.forEach((t, i) => {
       const isCurrent = i === curIdx;
       const playingHere = isCurrent && state.playing;
-      const liked = state.liked.has(i);
+      const liked = !!t.id && state.liked.has(t.id);
       const row = document.createElement('div');
       row.className = 'row' + (isCurrent ? ' playing' : '');
       row.dataset.idx = String(i);
@@ -223,29 +246,23 @@ export function initPlayer({ audio, view: initialView }) {
     });
   }
 
-  function renderRailSection() {
-    const r = view.rail;
-    if (!r || !r.items?.length) {
-      // null = leave the hardcoded demo cards alone (static fallback only)
-      // empty = explicitly hide
-      if (r && !r.items?.length) {
-        els.railSectionTitle.style.display = 'none';
-        els.rail.style.display = 'none';
-      } else if (!r && view.tracks) {
-        // Authed views without a rail (playlists, library track lists) hide
-        // the section so the demo cards don't bleed through.
-        els.railSectionTitle.style.display = 'none';
-        els.rail.style.display = 'none';
-      }
+  // Render one rail's worth of cards into a given container. Used for both
+  // the primary albums rail (view.rail) and the optional Singles rail
+  // (view.secondaryRail). The DOM IDs are passed in so the renderer doesn't
+  // need to know which rail it's filling.
+  function renderRailInto(railData, titleEl, h3El, railEl) {
+    if (!railData || !railData.items?.length) {
+      if (titleEl) titleEl.style.display = 'none';
+      if (railEl) railEl.style.display = 'none';
       return;
     }
-    els.railSectionTitle.style.display = '';
-    els.rail.style.display = '';
-    els.railSectionH3.textContent = r.title || '';
-    els.rail.classList.toggle('artists', r.variant === 'artist');
+    titleEl.style.display = '';
+    railEl.style.display = '';
+    h3El.textContent = railData.title || '';
+    railEl.classList.toggle('artists', railData.variant === 'artist');
 
-    els.rail.innerHTML = '';
-    r.items.forEach((item, i) => {
+    railEl.innerHTML = '';
+    railData.items.forEach((item, i) => {
       const card = document.createElement('div');
       card.className = 'card';
       card.dataset.idx = String(i);
@@ -260,11 +277,37 @@ export function initPlayer({ audio, view: initialView }) {
           <div class="ar">${escapeHtml(subtitle)}</div>
         </div>
       `;
-      // Stagger entrance: each card animates in 30ms after the previous.
       card.classList.add('card-in');
       card.style.animationDelay = i * 30 + 'ms';
-      els.rail.appendChild(card);
+      railEl.appendChild(card);
     });
+  }
+
+  function renderRailSection() {
+    // Primary rail. Honor the legacy "leave the static demo cards visible
+    // when no view has loaded yet" behaviour by only hiding when the rail
+    // is explicitly empty or another rendered section exists.
+    const r = view.rail;
+    if (!r || !r.items?.length) {
+      if (r && !r.items?.length) {
+        els.railSectionTitle.style.display = 'none';
+        els.rail.style.display = 'none';
+      } else if (!r && view.tracks) {
+        els.railSectionTitle.style.display = 'none';
+        els.rail.style.display = 'none';
+      }
+    } else {
+      renderRailInto(r, els.railSectionTitle, els.railSectionH3, els.rail);
+    }
+
+    // Secondary rail (Singles). Always hide when null/empty — no legacy
+    // demo content to preserve here.
+    renderRailInto(
+      view.secondaryRail,
+      els.singlesRailSectionTitle,
+      els.singlesRailSectionH3,
+      els.singlesRail,
+    );
   }
 
   // Track which track we last rendered into the transport so we only fire
@@ -295,8 +338,7 @@ export function initPlayer({ audio, view: initialView }) {
     els.miniCover.classList.toggle('has-art', !!t.artwork);
     els.miniTitle.textContent = t.title;
     els.miniArtist.textContent = els.nowArtist.textContent;
-    const idx = visibleIdx();
-    const liked = idx >= 0 && state.liked.has(idx);
+    const liked = !!t.id && state.liked.has(t.id);
     els.nowLike.classList.toggle('on', liked);
     els.nowLike.querySelector('svg').setAttribute('fill', liked ? 'currentColor' : 'none');
     els.totTime.textContent = t.duration;
@@ -352,7 +394,7 @@ export function initPlayer({ audio, view: initialView }) {
     const mainEl = document.querySelector('.main');
     if (!seg || !mainEl) return;
     const hasTracks = !!view.tracks?.items?.length;
-    const hasRail   = !!view.rail?.items?.length;
+    const hasRail   = !!(view.rail?.items?.length || view.secondaryRail?.items?.length);
     const enabled = {
       overview: hasTracks || hasRail,
       songs: hasTracks,
@@ -437,8 +479,17 @@ export function initPlayer({ audio, view: initialView }) {
   function next() { advance(1); }
   function prev() { advance(-1); }
 
+  function toggleLikeByTrackId(id) {
+    if (!id) return false;
+    if (state.liked.has(id)) state.liked.delete(id);
+    else state.liked.add(id);
+    persistLikes();
+    return true;
+  }
+
   function toggleLike(idx) {
-    state.liked.has(idx) ? state.liked.delete(idx) : state.liked.add(idx);
+    const t = tracks[idx];
+    if (!toggleLikeByTrackId(t?.id)) return;
     renderTrackSection();
     renderNowPlaying();
     // Pop the heart that was just toggled. renderTrackSection rebuilds the
@@ -449,7 +500,7 @@ export function initPlayer({ audio, view: initialView }) {
       void heart.offsetWidth;
       heart.classList.add('heart-pop');
     }
-    if (idx === visibleIdx()) {
+    if (state.currentTrack?.id === t.id) {
       els.nowLike.classList.remove('heart-pop');
       void els.nowLike.offsetWidth;
       els.nowLike.classList.add('heart-pop');
@@ -482,7 +533,17 @@ export function initPlayer({ audio, view: initialView }) {
     const btn = e.target.closest('button[data-tab]');
     if (!btn || btn.disabled) return;
     const mainEl = document.querySelector('.main');
-    if (mainEl) mainEl.dataset.tab = btn.dataset.tab;
+    if (mainEl) {
+      mainEl.dataset.tab = btn.dataset.tab;
+      // Replay the view-enter animation on every tab click — the CSS show/
+      // hide is instant on its own and reads as "nothing happened" without
+      // motion. Same forced-reflow trick used elsewhere to restart the
+      // keyframes from frame zero.
+      mainEl.classList.remove('view-leaving');
+      mainEl.classList.remove('view-entering');
+      void mainEl.offsetWidth;
+      mainEl.classList.add('view-entering');
+    }
     renderSegState();
   });
 
@@ -494,12 +555,78 @@ export function initPlayer({ audio, view: initialView }) {
     if (item) view.rail.onItemClick(item);
   });
 
+  els.singlesRail?.addEventListener('click', (e) => {
+    const card = e.target.closest('.card');
+    if (!card || !view.secondaryRail?.onItemClick) return;
+    const idx = Number(card.dataset.idx);
+    const item = view.secondaryRail.items[idx];
+    if (item) view.secondaryRail.onItemClick(item);
+  });
+
   els.play.addEventListener('click', togglePlay);
   $('miniPlay').addEventListener('click', togglePlay);
   $('next').addEventListener('click', next);
   $('prev').addEventListener('click', prev);
   $('miniNext').addEventListener('click', next);
   $('miniPrev').addEventListener('click', prev);
+
+  // Keyboard shortcuts. Skip when the user is typing in a text field so
+  // search input still gets normal arrow/space behaviour.
+  function adjustVolume(delta) {
+    state.volume = Math.max(0, Math.min(1, state.volume + delta));
+    audio.setVolume(state.volume);
+    renderVolume();
+  }
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (t && (t.matches?.('input, textarea, select') || t.isContentEditable)) return;
+    switch (e.key) {
+      case ' ':
+        e.preventDefault();
+        togglePlay();
+        break;
+      case 'ArrowRight':
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        next();
+        break;
+      case 'ArrowLeft':
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        prev();
+        break;
+      case 'ArrowUp':
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        adjustVolume(0.05);
+        break;
+      case 'ArrowDown':
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        adjustVolume(-0.05);
+        break;
+      case 'l': case 'L':
+        if (state.currentTrack?.id) {
+          els.nowLike.click();
+        }
+        break;
+      case 'm': case 'M':
+        e.preventDefault();
+        if (state.volume > 0) {
+          state._mutedVolume = state.volume;
+          state.volume = 0;
+        } else {
+          state.volume = state._mutedVolume ?? 0.6;
+        }
+        audio.setVolume(state.volume);
+        renderVolume();
+        break;
+      case '/':
+        e.preventDefault();
+        document.getElementById('searchInput')?.focus();
+        break;
+    }
+  });
 
   els.heroPlay.addEventListener('click', () => {
     const action = view.hero?.primaryAction;
@@ -525,8 +652,13 @@ export function initPlayer({ audio, view: initialView }) {
   });
 
   els.nowLike.addEventListener('click', () => {
-    const idx = visibleIdx();
-    if (idx >= 0) toggleLike(idx);
+    const id = state.currentTrack?.id;
+    if (!toggleLikeByTrackId(id)) return;
+    renderTrackSection();
+    renderNowPlaying();
+    els.nowLike.classList.remove('heart-pop');
+    void els.nowLike.offsetWidth;
+    els.nowLike.classList.add('heart-pop');
   });
 
   $('shuffle').addEventListener('click', (e) => {
@@ -621,9 +753,8 @@ export function initPlayer({ audio, view: initialView }) {
     setView(newView) {
       view = newView;
       tracks = view.tracks?.items || [];
-      // `liked` keys by index into the current view's list, so it's only
-      // meaningful within one view. Reset on navigation.
-      state.liked = new Set();
+      // Likes are keyed by track id and persisted, so they survive
+      // navigation; no per-view reset needed.
       // Critical: don't disturb playback when switching views. Only prep the
       // transport with this view's first track if nothing is currently
       // playing, so the user doesn't see a blank now-playing on initial nav
@@ -680,7 +811,6 @@ export function initPlayer({ audio, view: initialView }) {
       setTimeout(() => {
         view = newView;
         tracks = view.tracks?.items || [];
-        state.liked = new Set();
         if (!state.playing && tracks.length) {
           state.currentTrack = tracks[0];
           state.queue = tracks;
