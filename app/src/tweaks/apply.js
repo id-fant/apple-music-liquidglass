@@ -10,14 +10,14 @@ export const PALETTES = {
   cream:    ['#ffd166', '#ffe29a', '#ffba6b', '#ff9aa2', '#ffc4d6'],
 };
 
-// Locked values that are NOT user-tweakable. Any prior tint/accent in
-// localStorage from older Tweaks-panel versions is overridden by these —
-// the panel no longer exposes either control.
+// Locked values that are NOT user-tweakable. Any prior tint/accent/palette
+// in localStorage from older Tweaks-panel versions is overridden by these —
+// the panel no longer exposes these controls.
 const FIXED_TINT = 0;
 const FIXED_ACCENT = '#ff5d8f';
+const FIXED_PALETTE = 'aurora';
 
 export const DEFAULTS = {
-  palette: 'aurora',
   blur: 30,
   saturate: 1.7,
   stroke: 0.16,
@@ -32,7 +32,7 @@ export function applyTweaks(t) {
   root.style.setProperty('--glass-stroke-soft', `rgba(255,255,255,${t.stroke})`);
   root.style.setProperty('--accent', FIXED_ACCENT);
 
-  const colors = PALETTES[t.palette] || PALETTES.aurora;
+  const colors = PALETTES[FIXED_PALETTE];
   document.querySelectorAll('.blob').forEach((b, i) => {
     const c = colors[i % colors.length];
     b.style.background = `radial-gradient(circle, ${c} 0%, transparent 70%)`;

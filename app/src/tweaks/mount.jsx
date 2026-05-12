@@ -4,7 +4,6 @@ import { TweaksPanel } from './TweaksPanel.jsx';
 import {
   TweakSection,
   TweakSlider,
-  TweakSelect,
 } from './controls.jsx';
 import {
   applyTweaks,
@@ -31,20 +30,6 @@ function App() {
         <TweakSlider label="Blur"     value={t.blur}     onChange={(v) => set('blur', v)}     min={6}   max={60}  step={1}    unit="px" />
         <TweakSlider label="Saturate" value={t.saturate} onChange={(v) => set('saturate', v)} min={0.6} max={2.4} step={0.05} />
         <TweakSlider label="Edge"     value={t.stroke}   onChange={(v) => set('stroke', v)}   min={0}   max={0.6} step={0.02} />
-      </TweakSection>
-      <TweakSection label="Backdrop">
-        <TweakSelect
-          label="Palette"
-          value={t.palette}
-          onChange={(v) => set('palette', v)}
-          options={[
-            { value: 'aurora',   label: 'Aurora' },
-            { value: 'sunset',   label: 'Sunset' },
-            { value: 'forest',   label: 'Forest' },
-            { value: 'midnight', label: 'Midnight' },
-            { value: 'cream',    label: 'Cream' },
-          ]}
-        />
       </TweakSection>
     </TweaksPanel>
   );
