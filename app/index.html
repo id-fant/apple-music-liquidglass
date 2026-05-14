@@ -304,9 +304,53 @@
       </button>
     </nav>
 
+    <!-- Drawer scrim — sibling of .side inside .app so z-index:50 on
+         .side beats z-index:49 on .scrim within the same stacking
+         context. If the scrim were outside .app, .app's own stacking
+         context (created by backdrop-filter + isolation) would trap the
+         drawer below the scrim. -->
+    <div class="scrim" id="scrim"></div>
+
   </div>
 
-  <div class="scrim" id="scrim"></div>
+  <!-- Fullscreen now-playing — opens when the user taps the transport bar
+       (desktop) or the minibar (mobile). Cover-centric layout inspired by
+       Apple Music: blurred album art fills the backdrop, the cover sits
+       centred at ~70% width, and the controls cluster below. -->
+  <div class="now-full" id="nowFull" aria-hidden="true" inert>
+    <div class="nf-bg" id="nfBg"></div>
+    <button class="nf-close" id="nfClose" aria-label="Close fullscreen player" title="Close">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="nf-content">
+      <div class="nf-cover" id="nfCover"></div>
+      <div class="nf-meta">
+        <div class="nf-title-row">
+          <div class="nf-title-block">
+            <div class="nf-title" id="nfTitle">—</div>
+            <div class="nf-artist" id="nfArtist"></div>
+          </div>
+          <button class="nf-like" id="nfLike" aria-label="Like" title="Like">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="nf-scrub">
+        <div class="nf-bar" id="nfBar">
+          <div class="nf-fill" id="nfFill"></div>
+        </div>
+        <div class="nf-times">
+          <span id="nfCur">0:00</span>
+          <span id="nfRem">0:00</span>
+        </div>
+      </div>
+      <div class="nf-controls">
+        <button class="cbtn" id="nfPrev" aria-label="Previous"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h2v16H6zM20 4 9 12l11 8z"/></svg></button>
+        <button class="cbtn nf-play" id="nfPlay" aria-label="Play / pause"><svg id="nfPlayIcon" width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg></button>
+        <button class="cbtn" id="nfNext" aria-label="Next"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M16 4h2v16h-2zM4 4l11 8L4 20z"/></svg></button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <audio id="audio" preload="metadata"></audio>
