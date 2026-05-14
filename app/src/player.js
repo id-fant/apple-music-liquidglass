@@ -135,7 +135,24 @@ export function initPlayer({ audio, view: initialView }) {
     totTime: $('totTime'),
     vbar: $('vbar'),
     vfill: $('vfill'),
+    // Fullscreen now-playing
+    nowFull: $('nowFull'),
+    nfBg: $('nfBg'),
+    nfCover: $('nfCover'),
+    nfTitle: $('nfTitle'),
+    nfArtist: $('nfArtist'),
+    nfCur: $('nfCur'),
+    nfRem: $('nfRem'),
+    nfBar: $('nfBar'),
+    nfFill: $('nfFill'),
+    nfPlayIcon: $('nfPlayIcon'),
+    nfLike: $('nfLike'),
   };
+
+  // Audio duration is captured from the audio engine's time events so the
+  // fullscreen player can compute remaining time without re-querying the
+  // DOM <audio> element on every progress tick.
+  let lastDuration = 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -353,6 +370,7 @@ export function initPlayer({ audio, view: initialView }) {
         el.classList.add('meta-in');
       }
     }
+    renderFullMeta();
   }
 
   function renderPlayIcon() {
@@ -361,6 +379,10 @@ export function initPlayer({ audio, view: initialView }) {
       : '<path d="M6 4l14 8-14 8z"/>';
     els.playIcon.innerHTML = path;
     els.miniPlayIcon.innerHTML = path;
+    els.nfPlayIcon.innerHTML = path;
+    // .is-paused drives the cover-shrink in CSS — when the user pauses,
+    // the centred album cover scales down ~14% (Apple Music gesture).
+    els.nowFull.classList.toggle('is-paused', !state.playing);
   }
 
   function renderProgress() {
@@ -368,6 +390,33 @@ export function initPlayer({ audio, view: initialView }) {
     els.fill.style.width = pct;
     els.knob.style.left = pct;
     els.miniFill.style.width = pct;
+    els.nfFill.style.width = pct;
+  }
+
+  function renderFullMeta() {
+    const t = state.currentTrack;
+    if (!t) {
+      els.nfTitle.textContent = '—';
+      els.nfArtist.textContent = '';
+      els.nfCover.style.background = '';
+      els.nfBg.style.background = '';
+      return;
+    }
+    els.nfTitle.textContent = t.title || '—';
+    els.nfArtist.textContent = els.nowArtist.textContent;
+    // Cover: real artwork if present, else the gradient placeholder. The
+    // backdrop uses the same image (heavily blurred via CSS) for the
+    // refractive album-art glow behind the centred cover.
+    if (t.artwork) {
+      els.nfCover.style.background = `url('${t.artwork}') center / cover`;
+      els.nfBg.style.background = `url('${t.artwork}') center / cover`;
+    } else {
+      els.nfCover.style.background = coverBg(t);
+      els.nfBg.style.background = coverBg(t);
+    }
+    const liked = !!t.id && state.liked.has(t.id);
+    els.nfLike.classList.toggle('on', liked);
+    els.nfLike.querySelector('svg').setAttribute('fill', liked ? 'currentColor' : 'none');
   }
 
   function renderVolume() {
@@ -717,12 +766,100 @@ export function initPlayer({ audio, view: initialView }) {
     });
   });
 
+  // ── Fullscreen now-playing ────────────────────────────────────────────────
+  // Tap the transport's now-playing area (desktop) or the minibar (mobile)
+  // to expand into the Apple-Music-style fullscreen player. Like icon and
+  // mini transport buttons opt out so they don't double-trigger.
+  function openFullPlayer() {
+    if (!state.currentTrack) return;
+    renderFullMeta();
+    renderProgress();
+    renderPlayIcon();
+    els.nowFull.classList.add('open');
+    // inert + aria-hidden=false: subtree is now both visible to AT and
+    // focusable. Setting inert first (before aria-hidden) avoids a frame
+    // where the player is announced but focus is still blocked.
+    els.nowFull.removeAttribute('inert');
+    els.nowFull.setAttribute('aria-hidden', 'false');
+  }
+  function closeFullPlayer() {
+    // Move focus out before hiding — aria-hidden on an ancestor of the
+    // focused element is an ARIA spec violation (and Chrome logs a
+    // warning). Blur then mark inert so nothing inside can be re-focused.
+    if (els.nowFull.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    els.nowFull.classList.remove('open');
+    els.nowFull.setAttribute('inert', '');
+    els.nowFull.setAttribute('aria-hidden', 'true');
+  }
+  document.querySelector('.transport .now')?.addEventListener('click', (e) => {
+    if (e.target.closest('.like')) return;
+    openFullPlayer();
+  });
+  document.querySelector('.minibar')?.addEventListener('click', (e) => {
+    if (e.target.closest('.actions')) return;
+    openFullPlayer();
+  });
+  $('nfClose').addEventListener('click', closeFullPlayer);
+  $('nfPlay').addEventListener('click', togglePlay);
+  $('nfPrev').addEventListener('click', prev);
+  $('nfNext').addEventListener('click', next);
+  els.nfLike.addEventListener('click', () => {
+    const id = state.currentTrack?.id;
+    if (!toggleLikeByTrackId(id)) return;
+    renderTrackSection();
+    renderNowPlaying();
+    els.nfLike.classList.remove('heart-pop');
+    void els.nfLike.offsetWidth;
+    els.nfLike.classList.add('heart-pop');
+  });
+
+  // Fullscreen scrub bar — uses the same drag pattern as the desktop bar.
+  let nfDragging = false;
+  const nfSeek = (e) => {
+    const rect = els.nfBar.getBoundingClientRect();
+    const progress = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    state.progress = progress;
+    audio.seek(progress);
+    // Optimistic time update so the labels don't lag the next 'time' tick.
+    if (lastDuration > 0) {
+      els.nfCur.textContent = formatTime(progress * lastDuration);
+      els.nfRem.textContent = formatTime(Math.max(0, lastDuration - progress * lastDuration));
+    }
+    renderProgress();
+  };
+  els.nfBar.addEventListener('pointerdown', (e) => {
+    nfDragging = true;
+    els.nfBar.setPointerCapture(e.pointerId);
+    nfSeek(e);
+  });
+  els.nfBar.addEventListener('pointermove', (e) => { if (nfDragging) nfSeek(e); });
+  els.nfBar.addEventListener('pointerup', (e) => {
+    nfDragging = false;
+    els.nfBar.releasePointerCapture(e.pointerId);
+  });
+
+  // Escape closes the fullscreen player. Hooked here rather than inside the
+  // global keyboard switch so it runs even when nowFull is the active layer.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.nowFull.classList.contains('open')) {
+      e.preventDefault();
+      closeFullPlayer();
+    }
+  });
+
   // ── Audio engine subscriptions ────────────────────────────────────────────
 
   audio.on('time', (current, duration) => {
     state.progress = duration > 0 ? current / duration : 0;
+    lastDuration = duration;
     els.curTime.textContent = formatTime(current);
     els.totTime.textContent = formatTime(duration);
+    // Fullscreen times: elapsed on the left, remaining (no negative — keeps
+    // parity with the transport's elapsed/total pair so a glance maps).
+    els.nfCur.textContent = formatTime(current);
+    els.nfRem.textContent = formatTime(Math.max(0, duration - current));
     renderProgress();
   });
 
