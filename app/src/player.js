@@ -916,10 +916,47 @@ export function initPlayer({ audio, view: initialView }) {
   // Escape closes the fullscreen player. Hooked here rather than inside the
   // global keyboard switch so it runs even when nowFull is the active layer.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && els.nowFull.classList.contains('open')) {
-      e.preventDefault();
-      closeFullPlayer();
+    if (e.key === 'Escape') {
+      const moreSheet = $('moreSheet');
+      if (moreSheet?.classList.contains('open')) {
+        e.preventDefault();
+        closeMoreSheet();
+        return;
+      }
+      if (els.nowFull.classList.contains('open')) {
+        e.preventDefault();
+        closeFullPlayer();
+      }
     }
+  });
+
+  // ── More-options bottom sheet ────────────────────────────────────────────
+  // Tapping "..." in the fullscreen player opens a sheet with secondary
+  // actions (Lyrics, Queue, Devices, Share). Each item currently just
+  // logs and closes — wire actual handlers when those features land.
+  const moreSheet = $('moreSheet');
+  const msScrim = $('msScrim');
+  function openMoreSheet() {
+    moreSheet.classList.add('open');
+    moreSheet.removeAttribute('inert');
+    moreSheet.setAttribute('aria-hidden', 'false');
+  }
+  function closeMoreSheet() {
+    if (moreSheet.contains(document.activeElement)) document.activeElement.blur();
+    moreSheet.classList.remove('open');
+    moreSheet.setAttribute('inert', '');
+    moreSheet.setAttribute('aria-hidden', 'true');
+  }
+  $('nfMore').addEventListener('click', openMoreSheet);
+  msScrim.addEventListener('click', closeMoreSheet);
+  moreSheet.querySelectorAll('.ms-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      // Placeholder — the underlying Lyrics / Queue / Devices / Share
+      // features aren't wired yet. Log so the user can confirm the
+      // sheet is firing, and close the sheet for now.
+      console.log('More action:', btn.dataset.action);
+      closeMoreSheet();
+    });
   });
 
   // ── Audio engine subscriptions ────────────────────────────────────────────

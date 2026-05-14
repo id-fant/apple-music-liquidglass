@@ -648,11 +648,14 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 .vol .vbar .vfill{ position:absolute; left:0; top:0; bottom:0; width:60%; background:#fff; border-radius:999px }
 
 .eq{ display:inline-flex; align-items:flex-end; gap:2px; height:14px; margin:auto }
-.eq i{ width:2.5px; background: var(--accent); border-radius:1px; animation: eqA 1s ease-in-out infinite }
+/* Neutral white bars — the previous accent + warm-tone trio felt loud
+   next to the rest of the row. Faint per-bar opacity stagger keeps the
+   bars visually distinct without colour. */
+.eq i{ width:2.5px; background: rgba(255,255,255,.95); border-radius:1px; animation: eqA 1s ease-in-out infinite }
 .eq i:nth-child(1){ animation-delay:0s }
-.eq i:nth-child(2){ animation-delay:.2s; background:#ffb088 }
-.eq i:nth-child(3){ animation-delay:.4s; background:#ffd166 }
-.eq i:nth-child(4){ animation-delay:.1s }
+.eq i:nth-child(2){ animation-delay:.2s; background: rgba(255,255,255,.80) }
+.eq i:nth-child(3){ animation-delay:.4s; background: rgba(255,255,255,.65) }
+.eq i:nth-child(4){ animation-delay:.1s; background: rgba(255,255,255,.85) }
 @keyframes eqA{ 0%,100%{height:30%} 50%{height:100%} }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -712,10 +715,10 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   mix-blend-mode: screen;
   will-change: transform;
 }
-.nf-blob.b1{ top:  -10%; left: -10%; background: radial-gradient(circle, var(--nf-c1, #ff5d8f) 0%, transparent 60%); animation: nfDrift1 19.85s ease-in-out infinite }
-.nf-blob.b2{ top:  -5%;  right:-15%; background: radial-gradient(circle, var(--nf-c2, #6ee7ff) 0%, transparent 60%); animation: nfDrift2 23.46s ease-in-out infinite }
-.nf-blob.b3{ bottom:-15%; left: 10%; background: radial-gradient(circle, var(--nf-c3, #b388ff) 0%, transparent 60%); animation: nfDrift3 27.07s ease-in-out infinite }
-.nf-blob.b4{ bottom:-10%; right:-5%; background: radial-gradient(circle, var(--nf-c4, #ffb088) 0%, transparent 60%); animation: nfDrift4 21.66s ease-in-out infinite }
+.nf-blob.b1{ top:  -10%; left: -10%; background: radial-gradient(circle, var(--nf-c1, #ff5d8f) 0%, transparent 60%); animation: nfDrift1 14.89s ease-in-out infinite }
+.nf-blob.b2{ top:  -5%;  right:-15%; background: radial-gradient(circle, var(--nf-c2, #6ee7ff) 0%, transparent 60%); animation: nfDrift2 17.60s ease-in-out infinite }
+.nf-blob.b3{ bottom:-15%; left: 10%; background: radial-gradient(circle, var(--nf-c3, #b388ff) 0%, transparent 60%); animation: nfDrift3 20.30s ease-in-out infinite }
+.nf-blob.b4{ bottom:-10%; right:-5%; background: radial-gradient(circle, var(--nf-c4, #ffb088) 0%, transparent 60%); animation: nfDrift4 16.25s ease-in-out infinite }
 @keyframes nfDrift1 {
   0%, 100% { transform: translate(0, 0) scale(1) }
   33%      { transform: translate(20vw, 18vh) scale(1.08) }
@@ -921,6 +924,85 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 /* Cursor hint: tapping the music bar opens the fullscreen player. */
 .transport .now, .minibar{ cursor: pointer }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   MORE-OPTIONS BOTTOM SHEET
+   ────────────────────────────────────────────────────────────────────────
+   Slides up from the bottom when the "..." in the fullscreen player is
+   tapped. Holds Lyrics / Queue / Devices / Share — anything that
+   doesn't fit on the primary controls row. Same scrim + slide pattern
+   as the mobile drawer for visual consistency.
+   ────────────────────────────────────────────────────────────────────── */
+.more-sheet{
+  position: fixed; inset: 0;
+  z-index: 110;
+  pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0s linear .35s;
+}
+.more-sheet.open{
+  pointer-events: auto;
+  visibility: visible;
+  transition: visibility 0s linear 0s;
+}
+.ms-scrim{
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0);
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
+  transition: background .32s var(--ease-out-strong), backdrop-filter .32s, -webkit-backdrop-filter .32s;
+}
+.more-sheet.open .ms-scrim{
+  background: rgba(0,0,0,.46);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.ms-panel{
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, #2a2a2c 0%, #131315 100%);
+  border-top-left-radius: 18px; border-top-right-radius: 18px;
+  padding: 8px 12px calc(20px + env(safe-area-inset-bottom));
+  transform: translateY(100%);
+  transition: transform .35s var(--ease-out-strong);
+  box-shadow: 0 -18px 50px rgba(0,0,0,.55);
+}
+.more-sheet.open .ms-panel{ transform: translateY(0) }
+.ms-handle{
+  width: 38px; height: 4px;
+  background: rgba(255,255,255,.22);
+  border-radius: 2px;
+  margin: 6px auto 10px;
+}
+.ms-item{
+  display: flex; align-items: center; gap: 14px;
+  width: 100%;
+  padding: 14px 10px;
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 10px;
+  text-align: left;
+  transition: background var(--dur-press) ease;
+}
+.ms-item:hover, .ms-item:active{ background: rgba(255,255,255,.06) }
+.ms-item svg{ color: var(--accent); flex-shrink: 0 }
+
+/* Desktop: keep the sheet centred and constrained rather than full-width. */
+@media (min-width: 981px){
+  .ms-panel{
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, 100%);
+    width: min(420px, 90vw);
+    border-radius: 16px;
+    bottom: 24px;
+  }
+  .more-sheet.open .ms-panel{ transform: translate(-50%, 0) }
+}
+
 /* Mobile menu / sidebar drawer button */
 .menu-btn{ display:none }
 
@@ -1099,13 +1181,33 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     padding: 14px 14px 14px;
     -webkit-overflow-scrolling: touch;
   }
-  /* Stack title and seg vertically on ALL phone widths — wrap alone
-     wasn't triggering because the title + seg combined natural width
-     fit just under the viewport, but the seg's right edge clipped
-     against .main's padding boundary. Column layout sidesteps the
-     calc entirely. */
-  .page-head{ flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 12px }
-  .page-head .seg{ align-self: flex-start; max-width: 100% }
+  /* Title block + seg side-by-side; the seg becomes a horizontal
+     scroll-snap strip when there isn't enough room for all its tabs.
+     This scales to any number of seg buttons without per-breakpoint
+     work — if Discography overflows on a narrow phone, the user can
+     scroll the strip rather than have it clipped. */
+  .page-head{
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .page-head > div:first-child{ flex: 1; min-width: 0 }
+  .page-head .seg{
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .page-head .seg::-webkit-scrollbar{ display: none }
+  .page-head .seg button{
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
   .page-head h1{ font-size: 22px }
   .hero{ height: 200px; grid-template-columns: minmax(0,1fr); border-radius: 18px }
   .hero .portrait{ display:none }
