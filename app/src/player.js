@@ -147,6 +147,9 @@ export function initPlayer({ audio, view: initialView }) {
     nfFill: $('nfFill'),
     nfPlayIcon: $('nfPlayIcon'),
     nfLike: $('nfLike'),
+    nfBlobs: $('nfBlobs'),
+    nfShuffle: $('nfShuffle'),
+    nfRepeat: $('nfRepeat'),
   };
 
   // Audio duration is captured from the audio engine's time events so the
@@ -410,13 +413,75 @@ export function initPlayer({ audio, view: initialView }) {
     if (t.artwork) {
       els.nfCover.style.background = `url('${t.artwork}') center / cover`;
       els.nfBg.style.background = `url('${t.artwork}') center / cover`;
+      sampleAlbumPalette(t.artwork);
     } else {
       els.nfCover.style.background = coverBg(t);
       els.nfBg.style.background = coverBg(t);
+      applyFallbackPalette();
     }
     const liked = !!t.id && state.liked.has(t.id);
     els.nfLike.classList.toggle('on', liked);
     els.nfLike.querySelector('svg').setAttribute('fill', liked ? 'currentColor' : 'none');
+  }
+
+  // Sample 4 dominant-ish colours from the album cover by drawing it into
+  // a tiny canvas and bucketing pixels into a 4×4 grid (top-left,
+  // top-right, bottom-left, bottom-right). The four samples get written
+  // to CSS variables (--nf-c1..c4) on .nf-blobs and drive the floating
+  // blob gradient. Results are cached by URL so revisiting a cover
+  // doesn't re-decode the image.
+  const paletteCache = new Map();
+  let lastPaletteUrl = null;
+  function sampleAlbumPalette(url) {
+    if (lastPaletteUrl === url) return;
+    lastPaletteUrl = url;
+    const cached = paletteCache.get(url);
+    if (cached) { applyPalette(cached); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const size = 16;
+        const c = document.createElement('canvas');
+        c.width = size; c.height = size;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+        const palette = [
+          avgRegion(data, size, 0, 0, size/2, size/2),       // TL
+          avgRegion(data, size, size/2, 0, size, size/2),     // TR
+          avgRegion(data, size, 0, size/2, size/2, size),     // BL
+          avgRegion(data, size, size/2, size/2, size, size),  // BR
+        ];
+        paletteCache.set(url, palette);
+        if (lastPaletteUrl === url) applyPalette(palette);
+      } catch {
+        // Canvas tainted (CORS not honoured by the host) — keep current
+        // blobs rather than blanking the fullscreen.
+        applyFallbackPalette();
+      }
+    };
+    img.onerror = () => applyFallbackPalette();
+    img.src = url;
+  }
+  function avgRegion(data, size, x0, y0, x1, y1) {
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = (y * size + x) * 4;
+        r += data[i]; g += data[i+1]; b += data[i+2]; n++;
+      }
+    }
+    return `rgb(${Math.round(r/n)},${Math.round(g/n)},${Math.round(b/n)})`;
+  }
+  function applyPalette(p) {
+    els.nfBlobs.style.setProperty('--nf-c1', p[0]);
+    els.nfBlobs.style.setProperty('--nf-c2', p[1]);
+    els.nfBlobs.style.setProperty('--nf-c3', p[2]);
+    els.nfBlobs.style.setProperty('--nf-c4', p[3]);
+  }
+  function applyFallbackPalette() {
+    applyPalette(['#ff5d8f', '#6ee7ff', '#b388ff', '#ffb088']);
   }
 
   function renderVolume() {
@@ -710,14 +775,23 @@ export function initPlayer({ audio, view: initialView }) {
     els.nowLike.classList.add('heart-pop');
   });
 
-  $('shuffle').addEventListener('click', (e) => {
-    state.shuffle = !state.shuffle;
-    e.currentTarget.classList.toggle('on', state.shuffle);
-  });
-  $('repeat').addEventListener('click', (e) => {
-    state.repeat = !state.repeat;
-    e.currentTarget.classList.toggle('on', state.repeat);
-  });
+  // Shuffle + repeat live on BOTH the desktop transport and the fullscreen
+  // player. The sync helpers mirror state to both buttons so toggling
+  // from either entry point lights up both.
+  function syncShuffle() {
+    $('shuffle').classList.toggle('on', state.shuffle);
+    els.nfShuffle.classList.toggle('on', state.shuffle);
+  }
+  function syncRepeat() {
+    $('repeat').classList.toggle('on', state.repeat);
+    els.nfRepeat.classList.toggle('on', state.repeat);
+  }
+  function toggleShuffle() { state.shuffle = !state.shuffle; syncShuffle(); }
+  function toggleRepeat()  { state.repeat  = !state.repeat;  syncRepeat();  }
+  $('shuffle').addEventListener('click', toggleShuffle);
+  $('repeat').addEventListener('click', toggleRepeat);
+  els.nfShuffle.addEventListener('click', toggleShuffle);
+  els.nfRepeat.addEventListener('click', toggleRepeat);
 
   // Scrub bar
   let dragging = false;
@@ -758,13 +832,8 @@ export function initPlayer({ audio, view: initialView }) {
   menuBtn.addEventListener('click', () => { side.classList.add('open'); scrim.classList.add('show'); });
   scrim.addEventListener('click', closeDrawer);
 
-  // Mobile tab bar (visual only)
-  document.querySelectorAll('.tabbar button').forEach((b) => {
-    b.addEventListener('click', () => {
-      document.querySelectorAll('.tabbar button').forEach((x) => x.classList.remove('on'));
-      b.classList.add('on');
-    });
-  });
+  // Mobile tab bar is wired in main.js (setupBottomTabbar) so it can
+  // route through the same nav.navigate path the sidebar uses.
 
   // ── Fullscreen now-playing ────────────────────────────────────────────────
   // Tap the transport's now-playing area (desktop) or the minibar (mobile)
@@ -775,6 +844,10 @@ export function initPlayer({ audio, view: initialView }) {
     renderFullMeta();
     renderProgress();
     renderPlayIcon();
+    // Sync mode toggles in case the user touched them on the desktop
+    // transport before opening fullscreen.
+    els.nfShuffle.classList.toggle('on', state.shuffle);
+    els.nfRepeat.classList.toggle('on', state.repeat);
     els.nowFull.classList.add('open');
     // inert + aria-hidden=false: subtree is now both visible to AT and
     // focusable. Setting inert first (before aria-hidden) avoids a frame

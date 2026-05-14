@@ -75,6 +75,7 @@ async function boot() {
   setupNavButtons(nav);
   setupSearchBar(player, catalog, views, nav);
   setupSidebarNavigation(player, views, nav);
+  setupBottomTabbar(player, views, nav);
 
   // Boot view — works on either catalog.
   nav.navigate(() => views.byView['for-you'](player));
@@ -322,6 +323,49 @@ function setupSidebarNavigation(player, views, nav) {
 function selectSidebarItem(target) {
   document.querySelectorAll('.side-item').forEach((x) => x.classList.remove('on'));
   target.classList.add('on');
+  // Mirror to the bottom tabbar so the active tab stays in sync when the
+  // user navigates from the drawer instead of the tabbar itself.
+  const view = target.dataset.view;
+  if (view) {
+    document.querySelectorAll('.tabbar button[data-view]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.view === view);
+    });
+  }
+}
+
+// Bottom tabbar — proxies clicks through the same nav.navigate path the
+// sidebar uses so view changes feel identical from either entry point.
+// Visual feedback is instant: the .on class flips before the (often
+// network-bound) loader resolves.
+function setupBottomTabbar(player, views, nav) {
+  const tabs = document.querySelectorAll('.tabbar button');
+  tabs.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      tabs.forEach((x) => x.classList.remove('on'));
+      btn.classList.add('on');
+
+      // Search tab: focus the global search input. On phones the input is
+      // in the titlebar, so it's already visible — just grab focus.
+      if (btn.dataset.action === 'search') {
+        const input = document.getElementById('searchInput');
+        input?.focus();
+        input?.select?.();
+        return;
+      }
+
+      const viewName = btn.dataset.view;
+      const loader = views.byView[viewName];
+      if (!loader) return;
+      // Also light up the matching sidebar item so the drawer reflects
+      // the current view if the user opens it next.
+      const sideItem = document.querySelector(`.side-item[data-view="${viewName}"]`);
+      if (sideItem) {
+        document.querySelectorAll('.side-item').forEach((x) => x.classList.remove('on'));
+        sideItem.classList.add('on');
+      }
+      nav.navigate(() => loader(player));
+    });
+  });
 }
 
 function closeMobileDrawer() {
