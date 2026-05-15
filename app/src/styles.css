@@ -47,7 +47,16 @@
 }
 
 *{box-sizing:border-box}
-html, body{height:100%}
+html, body{
+  height: 100%;
+  /* Hard caps on the root so a rogue child element can't push the page
+     wider than the viewport. Without these, a single element with a
+     min-width or large fixed-position bounds can scroll the entire
+     app off-screen on mobile. */
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
 body{
   margin:0;
   font-family: var(--font-body);
@@ -125,6 +134,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 .stage{ position:fixed; inset:0; padding:0; z-index:2 }
 .app{
   width: 100%;
+  max-width: 100vw;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
@@ -149,7 +159,13 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   padding: 0 18px;
   border-bottom:1px solid rgba(255,255,255,0.08);
   position:relative; z-index:2;
+  /* Children must opt into shrinking; without this the search input's
+     intrinsic min-width pushes the right-side icons off the viewport
+     edge on very narrow phones. */
+  min-width: 0;
 }
+.titlebar > *{ min-width: 0 }
+.titlebar .right{ flex-shrink: 0 }
 .brand{
   font-family: var(--font-display); font-size:22px; line-height:1;
   color:var(--fg); letter-spacing:.005em;
@@ -275,7 +291,13 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 /* --- Main scrolling content --- */
 .main{
   grid-area: main;
-  overflow:auto;
+  /* Vertical scroll only. .rail uses negative margins to bleed into
+     this padding; without explicit overflow-x:hidden the rail's extra
+     14–22px on each side made the whole page horizontally scrollable
+     on mobile, which clipped the right edge of the title bar, tabs,
+     rows, and tabbar. */
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 18px 22px 22px;
   position:relative; z-index:1;
 }
@@ -783,6 +805,20 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   transform: scale(0.86);
 }
 
+/* Track-change zoom: a brief overshoot from scale(1.12) → scale(1) when
+   a new song loads. Triggered by JS toggling .nf-cover-in with a forced
+   reflow so the keyframe restarts even if it hadn't finished. When the
+   keyframe ends, the cover reverts to whatever static transform the
+   play/pause state dictates (transition smooths the handoff). */
+.nf-cover.nf-cover-in{
+  animation: nfCoverZoomIn 600ms var(--ease-out-strong);
+}
+@keyframes nfCoverZoomIn{
+  0%   { transform: scale(1.12); filter: blur(2px) }
+  60%  { filter: blur(0) }
+  100% { transform: scale(1);    filter: blur(0) }
+}
+
 .nf-meta{
   width: 100%;
   margin-top: 28px;
@@ -1209,14 +1245,30 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     scroll-snap-align: start;
   }
   .page-head h1{ font-size: 22px }
-  .hero{ height: 200px; grid-template-columns: minmax(0,1fr); border-radius: 18px }
-  .hero .portrait{ display:none }
-  .hero h2{ font-size: clamp(28px, 7vw, 38px); margin: 0 0 10px }
+  /* Force single-column hero + hidden portrait on every artist variant
+     so the desktop 2-col layout (`minmax(0,1fr) 240px`) can never leak
+     through when JS sets the variant class. Without `!important`, a
+     more-specific rule like `.hero.hero-artist` further down would win
+     and re-introduce the 240px portrait column — which pushed the
+     whole .main past the viewport's right edge when artist data loaded. */
+  .hero{
+    height: 200px;
+    grid-template-columns: minmax(0,1fr) !important;
+    border-radius: 18px;
+    width: 100%;
+    max-width: 100%;
+  }
+  .hero .portrait{ display:none !important }
+  .hero h2{ font-size: clamp(22px, 6vw, 34px); margin: 0 0 10px }
   .hero .text{ padding: 18px 20px }
   .hero .actions{ gap: 8px }
   .hero .actions .btn{ padding: 8px 16px; font-size: 12.5px }
   .hero.hero-artist{ height: 240px }
-  .hero.hero-artist h2{ font-size: clamp(34px, 8vw, 48px) }
+  /* Artist titles like "Michael Jackson" at the previous 34px floor
+     wrapped to 3 lines on narrow phones, pushing the stat + Play
+     button past the hero's overflow:hidden bottom. Lower floor keeps
+     the title on 1–2 lines on every phone width. */
+  .hero.hero-artist h2{ font-size: clamp(26px, 7.5vw, 44px) }
 
   /* Rail is now a flex horizontal-scroll strip on every breakpoint;
      just tighten gap and bleed for mobile main padding. */
@@ -1347,6 +1399,45 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   .tabbar button svg{ width: 18px; height: 18px }
 }
 
+/* ── 500px tier — bridges 640 and 380. Standard iPhone widths (375
+   /  390 / 414 / 430) all sit here. Tightens padding and shrinks the
+   hero/cards without going as compact as the ≤380 tier. ───────────── */
+@media (max-width: 500px){
+  .titlebar{ padding: 0 10px; gap: 7px }
+  .titlebar .right{ gap: 1px }
+  .titlebar .right .ibtn{ width: 34px; height: 34px }
+  .menu-btn{ width: 38px; height: 38px }
+  .global-search{ padding: 7px 10px }
+  .global-search input{ font-size: 15px }
+  .main{ padding: 12px 11px 12px }
+  .page-head h1{ font-size: 19px }
+  .seg button{ padding: 4px 9px; font-size: 10.5px }
+  .hero{ height: 170px }
+  .hero .text{ padding: 13px 14px }
+  .hero h2{ font-size: clamp(26px, 7vw, 34px) }
+  .hero .stat{ font-size: 11px; margin-bottom: 8px }
+  .hero .verified{ font-size: 9.5px; padding: 3px 7px; margin-bottom: 6px }
+  .hero .actions .btn{ padding: 6px 12px; font-size: 11.5px }
+  .hero.hero-artist{ height: 210px }
+  .hero.hero-artist h2{ font-size: clamp(24px, 7vw, 38px); margin: 0 0 12px }
+  .rail{ gap: 10px; margin: 0 -11px; padding-left: 11px; padding-right: 11px; scroll-padding: 0 11px }
+  .card{ width: 140px; min-width: 140px; max-width: 140px }
+  .card .art .label{ font-size: 20px; padding: 11px }
+  .row{ grid-template-columns: auto 34px minmax(0,1fr) auto auto; gap: 6px; padding: 7px 2px }
+  .row .num{ min-width: 16px; font-size: 12px }
+  .row .ti{ font-size: 12.5px }
+  .row .cv{ width: 34px; height: 34px }
+  .row .dur{ min-width: 30px; font-size: 11.5px }
+  .row .heart{ height: 32px; width: 32px }
+  .minibar{ padding: 7px 10px; gap: 8px }
+  .minibar .cv{ width: 38px; height: 38px }
+  .minibar .actions .cbtn{ width: 36px; height: 36px }
+  .minibar .actions .play{ width: 36px; height: 36px }
+  .tabbar{ padding: 5px 3px calc(5px + env(safe-area-inset-bottom)) }
+  .tabbar button{ font-size: 9.5px; padding: 5px 1px }
+  .tabbar button svg{ width: 17px; height: 17px }
+}
+
 /* ── Very small phone (≤380) ──────────────────────────────────────────── */
 @media (max-width: 380px){
   .titlebar{ padding: 0 8px; gap: 6px }
@@ -1355,14 +1446,106 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   .titlebar .right .ibtn{ width: 32px; height: 32px }
   .user-pill{ padding: 3px }
   .user-pill .av{ width: 26px; height: 26px }
-  .main{ padding: 10px 10px 10px }
+  .main{ padding: 10px 9px 10px }
   .hero{ height: 160px }
   .hero h2{ font-size: clamp(24px, 7.5vw, 30px) }
-  .card{ width: 130px; min-width: 130px; max-width: 130px }
+  .card{ width: 128px; min-width: 128px; max-width: 128px }
   .card .art .label{ font-size: 18px; padding: 10px }
-  .tabbar{ grid-template-columns: repeat(5, 1fr); padding: 4px 2px calc(4px + env(safe-area-inset-bottom)) }
+  /* IMPORTANT: keep the `minmax(0, 1fr)` floor from the ≤980 rule.
+     The earlier `repeat(5, 1fr)` here lost the minmax, which let one
+     tab's min-content expand its column and push later tabs (Search)
+     off the right edge again. */
+  .tabbar{
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
+  }
   .tabbar button{ font-size: 9px; padding: 4px 1px }
   .tabbar button svg{ width: 16px; height: 16px }
+}
+
+/* ── Ultra-narrow (≤360) — iPhone SE 1st gen (320), Galaxy Fold cover
+   (280), and anything custom-narrow. Aggressively compact everything,
+   strip non-essential chrome, and guarantee the titlebar fits. ────── */
+@media (max-width: 360px){
+  .titlebar{ padding: 0 6px; gap: 4px }
+  .menu-btn{ width: 34px; height: 34px }
+  /* Drop the placeholder text — the icon is enough at this width. */
+  .global-search{ padding: 5px 8px; gap: 6px }
+  .global-search input{ font-size: 14px }
+  .global-search input::placeholder{ font-size: 12px }
+  .titlebar .right{ gap: 0 }
+  .titlebar .right .ibtn{ width: 28px; height: 28px }
+  .user-pill{ padding: 2px }
+  .user-pill .av{ width: 22px; height: 22px }
+  .main{ padding: 8px 8px 8px }
+  .page-head h1{ font-size: 17px }
+  .crumb{ font-size: 10px }
+  .seg button{ padding: 4px 8px; font-size: 10px }
+  .hero{ height: 150px; border-radius: 14px }
+  .hero .text{ padding: 12px 12px }
+  .hero h2{ font-size: clamp(20px, 7vw, 26px); margin: 0 0 6px }
+  .hero .stat{ font-size: 10.5px; margin-bottom: 6px }
+  .hero .verified{ font-size: 9px; padding: 3px 6px; margin-bottom: 5px }
+  .hero .actions{ gap: 6px }
+  .hero .actions .btn{ padding: 5px 10px; font-size: 11px }
+  .hero.hero-artist{ height: 190px }
+  .hero.hero-artist h2{ font-size: clamp(20px, 6.5vw, 30px); margin: 0 0 8px }
+  .section-title{ margin: 14px 0 6px }
+  .section-title h3{ font-size: 14px }
+  .rail{ gap: 8px; margin: 0 -8px; padding-left: 8px; padding-right: 8px; scroll-padding: 0 8px }
+  .card{ width: 116px; min-width: 116px; max-width: 116px }
+  .card .art .label{ font-size: 16px; padding: 8px }
+  .card .meta .nm{ font-size: 11.5px }
+  .card .meta .ar{ font-size: 10.5px }
+  .row{ grid-template-columns: auto 32px minmax(0,1fr) auto auto; gap: 5px; padding: 6px 2px }
+  .row .num{ min-width: 14px; font-size: 11px }
+  .row .ti{ font-size: 12px }
+  .row .ti .sub{ font-size: 10.5px }
+  .row .cv{ width: 32px; height: 32px }
+  .row .dur{ min-width: 26px; font-size: 10.5px; padding-right: 0 }
+  .row .heart{ height: 30px; width: 30px }
+  .minibar{ padding: 6px 8px; gap: 6px }
+  .minibar .cv{ width: 34px; height: 34px }
+  .minibar .nm{ font-size: 12px }
+  .minibar .ar{ font-size: 10.5px }
+  .minibar .actions{ gap: 0 }
+  .minibar .actions .cbtn{ width: 32px; height: 32px }
+  .minibar .actions .play{ width: 32px; height: 32px }
+  .tabbar button{ font-size: 8.5px; padding: 4px 1px; gap: 1px }
+  .tabbar button svg{ width: 15px; height: 15px }
+}
+
+/* ── Emergency-narrow (≤300) — Galaxy Fold inner display, smartwatch
+   browsers, anything that should not exist but might. Hides the search
+   field entirely (use the drawer instead), shrinks chrome to bare
+   minimum, and stacks/folds where needed. ─────────────────────────── */
+@media (max-width: 300px){
+  .titlebar{ padding: 0 4px; gap: 3px }
+  /* Search field hides — the menu drawer is the navigation surface. */
+  .global-search{ display: none }
+  .menu-btn{ width: 32px; height: 32px }
+  .titlebar .right .ibtn{ width: 26px; height: 26px }
+  .user-pill .av{ width: 20px; height: 20px }
+  .main{ padding: 6px 6px 6px }
+  .hero{ height: 130px }
+  .hero h2{ font-size: clamp(18px, 7vw, 22px) }
+  .hero.hero-artist{ height: 160px }
+  .hero.hero-artist h2{ font-size: clamp(18px, 6.5vw, 24px); margin: 0 0 6px }
+  .card{ width: 96px; min-width: 96px; max-width: 96px }
+  .card .art .label{ font-size: 13px; padding: 6px }
+  .row{ grid-template-columns: auto 28px minmax(0,1fr) auto; gap: 4px; padding: 6px 2px }
+  /* Drop the duration column at this width — heart is the only trailing
+     control. The user can see duration in the fullscreen player. */
+  .row .dur{ display: none }
+  .row .cv{ width: 28px; height: 28px }
+  .row .ti{ font-size: 11.5px }
+  .minibar{ padding: 6px; gap: 5px }
+  .minibar .cv{ width: 32px; height: 32px }
+  .minibar .actions .cbtn{ width: 30px; height: 30px }
+  .minibar .actions .play{ width: 30px; height: 30px }
+  /* Tabbar: drop labels entirely, icons only. */
+  .tabbar button{ font-size: 0 }
+  .tabbar button svg{ width: 18px; height: 18px }
 }
 
 /* ── Landscape phone (short height) ───────────────────────────────────── */

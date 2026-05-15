@@ -373,7 +373,7 @@ export function initPlayer({ audio, view: initialView }) {
         el.classList.add('meta-in');
       }
     }
-    renderFullMeta();
+    renderFullMeta(trackChanged);
   }
 
   function renderPlayIcon() {
@@ -396,7 +396,7 @@ export function initPlayer({ audio, view: initialView }) {
     els.nfFill.style.width = pct;
   }
 
-  function renderFullMeta() {
+  function renderFullMeta(trackChanged = false) {
     const t = state.currentTrack;
     if (!t) {
       els.nfTitle.textContent = '—';
@@ -422,6 +422,15 @@ export function initPlayer({ audio, view: initialView }) {
     const liked = !!t.id && state.liked.has(t.id);
     els.nfLike.classList.toggle('on', liked);
     els.nfLike.querySelector('svg').setAttribute('fill', liked ? 'currentColor' : 'none');
+
+    // Zoom-in overshoot when a new track loads. Forced reflow between
+    // remove + add restarts the keyframe even if the previous one
+    // hadn't finished (rapid next/prev presses).
+    if (trackChanged) {
+      els.nfCover.classList.remove('nf-cover-in');
+      void els.nfCover.offsetWidth;
+      els.nfCover.classList.add('nf-cover-in');
+    }
   }
 
   // Sample 4 dominant-ish colours from the album cover by drawing it into
