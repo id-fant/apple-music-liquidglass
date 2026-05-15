@@ -174,7 +174,16 @@ export function createViews(catalog, navigate, opts = {}) {
       hero: {
         label: a.type === 'single' ? 'Single' : 'Album',
         title: a.name,
-        subtitle: `${a.artist}${a.year ? ` · ${a.year}` : ''} · ${data.tracks.length} tracks`,
+        // The artist is rendered as a clickable hero-artist-link by the
+        // hero renderer (see player.js renderHero); subtitle here is just
+        // the trailing year + track count that follows the link.
+        subtitle: `${a.year ? `${a.year} · ` : ''}${data.tracks.length} tracks`,
+        artistLink: a.artistId
+          ? {
+              name: a.artist,
+              onClick: () => navigate(() => loadArtist(a.artistId, player)),
+            }
+          : null,
         artwork: a.artwork,
         bgColor: null,
         showPortrait: true,

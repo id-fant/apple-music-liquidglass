@@ -70,6 +70,10 @@ async function boot() {
   const nav = createNavigator();
   const views = createViews(catalog, nav.navigate, { authBlocked, source });
 
+  // Wire fullscreen artist-line → artist discography navigation. Done here
+  // (not at initPlayer) because views + nav don't exist that early.
+  player.setArtistNavigator((id) => nav.navigate(() => views.artist(id, player)));
+
   setupSignInButton();
   setupTweaksButton();
   setupNavButtons(nav);

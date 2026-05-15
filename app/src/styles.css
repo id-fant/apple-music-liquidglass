@@ -408,6 +408,22 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   text-shadow: 0 2px 30px rgba(0,0,0,.25);
 }
 .hero .stat{ font-size:12.5px; color:rgba(255,255,255,.85); margin-bottom: 14px }
+/* Inline artist link inside the hero subtitle (album views): visually
+   the same weight/colour as the surrounding stat text but with a hover
+   underline + brighter colour to signal it's interactive. */
+.hero-artist-link{
+  cursor: pointer;
+  color: inherit;
+  font-weight: 600;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-press) ease, color var(--dur-press) ease;
+}
+.hero-artist-link:hover,
+.hero-artist-link:focus-visible{
+  color: #fff;
+  border-bottom-color: rgba(255,255,255,.55);
+  outline: none;
+}
 .hero .actions{ display:flex; gap:10px; flex-wrap:wrap }
 .btn{
   border:0; cursor:pointer; font-family:inherit; font-weight:600; font-size:13px;
@@ -690,26 +706,36 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
    bottom so it reads as a sheet expanding from the music bar.
    ────────────────────────────────────────────────────────────────────── */
 .now-full{
+  /* Cover width drives the layout; the meta/scrub/controls stack sits
+     slightly inset under the cover (92% of cover width) so the
+     transport doesn't visually extend all the way to the cover edges.
+     Cover was min(420px, 70vw); +20% → min(504px, 84vw). */
+  --nf-cover-w: min(504px, 84vw);
+  --nf-stack-w: calc(var(--nf-cover-w) * 0.92);
   position: fixed; inset: 0;
   z-index: 100;
   display: flex; align-items: center; justify-content: center;
   pointer-events: none;
   opacity: 0;
-  transform: translateY(24px);
-  transition: opacity .35s var(--ease-out-strong), transform .4s var(--ease-out-strong);
+  transform: translate3d(0, 24px, 0);
+  transition: opacity .32s cubic-bezier(0.32, 0.72, 0, 1),
+              transform .42s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
+  will-change: opacity, transform;
+  contain: layout paint;
 }
 .now-full.open{
   pointer-events: auto;
   opacity: 1;
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0);
 }
 .nf-bg{
   position: absolute; inset: -10%;
   background-size: cover; background-position: center;
   filter: blur(80px) saturate(1.7);
-  transform: scale(1.15);
+  transform: translate3d(0, 0, 0) scale(1.15);
   transition: background .6s var(--ease-out-strong);
+  contain: paint;
 }
 .nf-bg::after{
   content: ""; position: absolute; inset: 0;
@@ -726,7 +752,9 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   pointer-events: none;
   filter: blur(60px) saturate(1.5);
   opacity: 0;
+  transform: translateZ(0);
   transition: opacity .5s var(--ease-out-strong);
+  contain: paint;
 }
 .now-full.open .nf-blobs{ opacity: 1 }
 .nf-blob{
@@ -737,10 +765,10 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   mix-blend-mode: screen;
   will-change: transform;
 }
-.nf-blob.b1{ top:  -10%; left: -10%; background: radial-gradient(circle, var(--nf-c1, #ff5d8f) 0%, transparent 60%); animation: nfDrift1 14.89s ease-in-out infinite }
-.nf-blob.b2{ top:  -5%;  right:-15%; background: radial-gradient(circle, var(--nf-c2, #6ee7ff) 0%, transparent 60%); animation: nfDrift2 17.60s ease-in-out infinite }
-.nf-blob.b3{ bottom:-15%; left: 10%; background: radial-gradient(circle, var(--nf-c3, #b388ff) 0%, transparent 60%); animation: nfDrift3 20.30s ease-in-out infinite }
-.nf-blob.b4{ bottom:-10%; right:-5%; background: radial-gradient(circle, var(--nf-c4, #ffb088) 0%, transparent 60%); animation: nfDrift4 16.25s ease-in-out infinite }
+.nf-blob.b1{ top:  -10%; left: -10%; background: radial-gradient(circle, var(--nf-c1, #ff5d8f) 0%, transparent 60%); animation: nfDrift1 11.91s ease-in-out infinite }
+.nf-blob.b2{ top:  -5%;  right:-15%; background: radial-gradient(circle, var(--nf-c2, #6ee7ff) 0%, transparent 60%); animation: nfDrift2 14.08s ease-in-out infinite }
+.nf-blob.b3{ bottom:-15%; left: 10%; background: radial-gradient(circle, var(--nf-c3, #b388ff) 0%, transparent 60%); animation: nfDrift3 16.24s ease-in-out infinite }
+.nf-blob.b4{ bottom:-10%; right:-5%; background: radial-gradient(circle, var(--nf-c4, #ffb088) 0%, transparent 60%); animation: nfDrift4 13.00s ease-in-out infinite }
 @keyframes nfDrift1 {
   0%, 100% { transform: translate(0, 0) scale(1) }
   33%      { transform: translate(20vw, 18vh) scale(1.08) }
@@ -764,8 +792,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 .nf-close{
   position: absolute;
   top: calc(14px + env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(14px + env(safe-area-inset-left));
   width: 44px; height: 44px; border-radius: 12px;
   background: rgba(255,255,255,.10);
   border: 1px solid rgba(255,255,255,.16);
@@ -778,7 +805,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   transition: background var(--dur-press) ease, transform var(--dur-press) var(--ease-out-strong);
 }
 .nf-close:hover{ background: rgba(255,255,255,.18) }
-.nf-close:active{ transform: translateX(-50%) scale(0.94) }
+.nf-close:active{ transform: scale(0.94) }
 
 .nf-content{
   position: relative; z-index: 1;
@@ -788,7 +815,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 }
 
 .nf-cover{
-  width: min(420px, 70vw);
+  width: var(--nf-cover-w);
   aspect-ratio: 1 / 1;
   border-radius: 16px;
   background-size: cover; background-position: center;
@@ -796,31 +823,33 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   box-shadow:
     0 30px 60px rgba(0,0,0,.55),
     0 0 0 1px rgba(255,255,255,.08);
+  transform: translateZ(0);
   transition: transform .45s var(--ease-out-strong);
   will-change: transform;
 }
 /* Apple Music-style: cover shrinks ~14% when paused, scales back up when
    playing. Keeps the screen visually "alive" with playback state. */
 .now-full.is-paused .nf-cover{
-  transform: scale(0.86);
+  transform: scale(0.86) translateZ(0);
 }
 
-/* Track-change zoom: a brief overshoot from scale(1.12) → scale(1) when
+/* Track-change zoom: a brief overshoot from scale(1.08) → scale(1) when
    a new song loads. Triggered by JS toggling .nf-cover-in with a forced
-   reflow so the keyframe restarts even if it hadn't finished. When the
-   keyframe ends, the cover reverts to whatever static transform the
-   play/pause state dictates (transition smooths the handoff). */
+   reflow so the keyframe restarts even if it hadn't finished. Pure
+   transform + opacity (no filter blur) so the whole animation runs on
+   the compositor and never triggers paint. When the keyframe ends, the
+   cover reverts to whatever static transform the play/pause state
+   dictates (transition smooths the handoff). */
 .nf-cover.nf-cover-in{
-  animation: nfCoverZoomIn 600ms var(--ease-out-strong);
+  animation: nfCoverZoomIn 520ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 @keyframes nfCoverZoomIn{
-  0%   { transform: scale(1.12); filter: blur(2px) }
-  60%  { filter: blur(0) }
-  100% { transform: scale(1);    filter: blur(0) }
+  0%   { transform: scale(1.08) translateZ(0); opacity: 0.5 }
+  100% { transform: scale(1)    translateZ(0); opacity: 1 }
 }
 
 .nf-meta{
-  width: 100%;
+  width: var(--nf-stack-w);
   margin-top: 28px;
 }
 .nf-title-row{
@@ -839,6 +868,18 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   color: rgba(255,255,255,.72);
   margin-top: 3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: color var(--dur-press) ease;
+}
+/* Clickable variant — set when state.currentTrack has an artistId and the
+   artistNavigator is wired (see player.js renderFullMeta). Mirrors the
+   hero artist link styling so the affordance is consistent. */
+.nf-artist[data-clickable]{
+  cursor: pointer;
+}
+.nf-artist[data-clickable]:hover,
+.nf-artist[data-clickable]:focus-visible{
+  color: #fff;
+  outline: none;
 }
 .nf-like{
   flex-shrink: 0;
@@ -857,7 +898,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 .nf-like.on svg{ fill: currentColor }
 
 .nf-scrub{
-  width: 100%;
+  width: var(--nf-stack-w);
   margin-top: 20px;
 }
 .nf-bar{
@@ -884,6 +925,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 }
 
 .nf-controls{
+  width: var(--nf-stack-w);
   display: flex; align-items: center; justify-content: center;
   gap: clamp(14px, 4.5vw, 32px);
   margin-top: 28px;
@@ -922,6 +964,10 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     -webkit-backdrop-filter: blur(26px) saturate(1.4);
     backdrop-filter: blur(26px) saturate(1.4);
   }
+  /* Smaller back button on phones — desktop's 44px feels chunky in a
+     mobile sheet where the tap area is already comfortable. */
+  .nf-close{ width: 36px; height: 36px; border-radius: 10px }
+  .nf-close svg{ width: 16px; height: 16px }
   .nf-bg{ opacity: 0.55 }
   .nf-bg::after{
     background: linear-gradient(180deg, rgba(0,0,0,.10) 0%, rgba(0,0,0,.32) 100%);
@@ -938,20 +984,22 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   .nf-artist{ text-shadow: 0 1px 6px rgba(0,0,0,.35) }
 }
 
-/* Small-phone tuning */
+/* Small-phone tuning. Cover width was 78vw → +20% → 94vw (capped). */
 @media (max-width: 480px){
-  .nf-cover{ width: 78vw }
-  .nf-content{ width: min(420px, 90vw); padding: 22px 0 }
+  .now-full{ --nf-cover-w: min(440px, 94vw) }
+  .nf-content{ width: min(440px, 94vw); padding: 22px 0 }
   .nf-meta{ margin-top: 22px }
   .nf-controls{ margin-top: 22px }
 }
-/* Landscape phone — drop the cover size so meta + controls still fit */
+/* Landscape phone — cover is height-bounded so the var would crush the
+   controls horizontally if shared. Override the meta/scrub/controls to a
+   wider, usability-oriented width while letting the cover follow height. */
 @media (max-height: 560px) and (orientation: landscape){
+  .now-full{ --nf-cover-w: min(46vh, 288px) }
   .nf-content{ padding: 12px 0 }
-  .nf-cover{ width: min(38vh, 240px) }
-  .nf-meta{ margin-top: 16px }
-  .nf-scrub{ margin-top: 12px }
-  .nf-controls{ margin-top: 14px; gap: 22px }
+  .nf-meta{ width: min(420px, 60vw); margin-top: 16px }
+  .nf-scrub{ width: min(420px, 60vw); margin-top: 12px }
+  .nf-controls{ width: min(420px, 60vw); margin-top: 14px; gap: 22px }
   .nf-controls .cbtn{ width: 48px; height: 48px }
   .nf-controls .nf-play{ width: 60px; height: 60px }
   .nf-controls .nf-aux{ width: 36px; height: 36px }
@@ -1326,7 +1374,11 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
      and push later tabs ("Search") off-screen. */
   .tabbar{
     grid-area: tran;
-    display:grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* `grid-template-rows: 1fr` makes the single button row fill the full
+       tabbar height (76px from .app) instead of sitting at content height
+       and leaving dead space below — without this, padding-bottom + the
+       fixed row carved out a ~20px empty strip beneath the labels. */
+    display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: 1fr;
     border-top: 1px solid rgba(255,255,255,.14);
     background: rgba(20,24,32,.85);
     -webkit-backdrop-filter: blur(20px) saturate(1.6);
@@ -1337,7 +1389,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
      tabbar; the previous --fg-mute (50%) faded into the background on
      OLED phones. Active items keep the accent colour. */
   .tabbar button{
-    display:flex; flex-direction:column; align-items:center; gap:3px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
     background:transparent; border:0; color:var(--fg-dim); font-size:10px; font-weight:600; padding:6px 2px; border-radius:10px; cursor:pointer; font-family:inherit;
     min-height: 44px;
     /* min-width:0 lets the button shrink to the column width. Labels

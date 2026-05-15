@@ -63,6 +63,10 @@ export function staticArtistView({ artist, tracks }) {
 export function initPlayer({ audio, view: initialView }) {
   let view = initialView;
   let tracks = view.tracks?.items || [];
+  // Wired by main.js after the views/navigator exist; called when the user
+  // clicks the artist line in the fullscreen player to jump to that artist's
+  // discography. Stays null until registered (no-ops then).
+  let artistNavigator = null;
 
   // Likes are keyed by track id (so they survive view changes and reloads),
   // backed by localStorage. The Set holds whatever string ids the catalogs
@@ -170,8 +174,27 @@ export function initPlayer({ audio, view: initialView }) {
     els.heroLabelText.textContent = h.label || '';
     els.heroLabel.style.display = h.label ? '' : 'none';
     els.heroTitle.textContent = h.title || '';
-    els.heroStat.textContent = h.subtitle || '';
-    els.heroStat.style.display = h.subtitle ? '' : 'none';
+    // Subtitle: optional artistLink rendered as a clickable span before the
+    // plain-text remainder. Used by album views so the artist name above
+    // the Play button navigates to that artist's discography.
+    els.heroStat.textContent = '';
+    if (h.artistLink && h.artistLink.name) {
+      const link = document.createElement('span');
+      link.className = 'hero-artist-link';
+      link.textContent = h.artistLink.name;
+      link.tabIndex = 0;
+      link.setAttribute('role', 'link');
+      const fire = (e) => { e.stopPropagation(); h.artistLink.onClick?.(); };
+      link.addEventListener('click', fire);
+      link.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(e); }
+      });
+      els.heroStat.appendChild(link);
+      if (h.subtitle) els.heroStat.appendChild(document.createTextNode(' · ' + h.subtitle));
+    } else if (h.subtitle) {
+      els.heroStat.textContent = h.subtitle;
+    }
+    els.heroStat.style.display = h.subtitle || h.artistLink ? '' : 'none';
 
     // Portrait: real photo or the original placeholder pattern.
     if (h.showPortrait === false) {
@@ -407,6 +430,16 @@ export function initPlayer({ audio, view: initialView }) {
     }
     els.nfTitle.textContent = t.title || '—';
     els.nfArtist.textContent = els.nowArtist.textContent;
+    // Toggle clickable state — only navigate-able when we know the artist id.
+    if (t.artistId && artistNavigator) {
+      els.nfArtist.setAttribute('data-clickable', '');
+      els.nfArtist.setAttribute('role', 'link');
+      els.nfArtist.setAttribute('tabindex', '0');
+    } else {
+      els.nfArtist.removeAttribute('data-clickable');
+      els.nfArtist.removeAttribute('role');
+      els.nfArtist.removeAttribute('tabindex');
+    }
     // Cover: real artwork if present, else the gradient placeholder. The
     // backdrop uses the same image (heavily blurred via CSS) for the
     // refractive album-art glow behind the centred cover.
@@ -887,6 +920,18 @@ export function initPlayer({ audio, view: initialView }) {
   $('nfPlay').addEventListener('click', togglePlay);
   $('nfPrev').addEventListener('click', prev);
   $('nfNext').addEventListener('click', next);
+  // Artist line → close fullscreen, then jump to the artist's discography.
+  // The handler no-ops when no artistId or no navigator is registered.
+  const fireNfArtist = () => {
+    const id = state.currentTrack?.artistId;
+    if (!id || !artistNavigator) return;
+    closeFullPlayer();
+    artistNavigator(id);
+  };
+  els.nfArtist.addEventListener('click', fireNfArtist);
+  els.nfArtist.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fireNfArtist(); }
+  });
   els.nfLike.addEventListener('click', () => {
     const id = state.currentTrack?.id;
     if (!toggleLikeByTrackId(id)) return;
@@ -1006,6 +1051,12 @@ export function initPlayer({ audio, view: initialView }) {
   // ── Controller ────────────────────────────────────────────────────────────
 
   return {
+    setArtistNavigator(fn) {
+      artistNavigator = fn;
+      // Re-render fullscreen meta so the clickable affordances pick up
+      // immediately if the player was already populated before this was wired.
+      renderFullMeta();
+    },
     setView(newView) {
       view = newView;
       tracks = view.tracks?.items || [];
