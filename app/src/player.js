@@ -163,6 +163,47 @@ export function initPlayer({ audio, view: initialView }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // Apple Music-style horizontal marquee for fixed-width title/artist
+  // labels. Wraps the text in a child <span.marquee-text> so the parent's
+  // existing nowrap+overflow:hidden frames it; measures after layout and
+  // toggles .is-marquee with --marquee-distance / --marquee-duration only
+  // when the text actually overflows. Keeps the container width fixed —
+  // names that fit sit static, names that don't scroll smoothly.
+  function setMarqueeText(el, text) {
+    if (!el) return;
+    const value = text || '';
+    const existing = el.firstElementChild;
+    // Reuse the span if the text hasn't changed — avoids tearing down the
+    // animation on every re-render (track ticks, like toggles, etc.).
+    if (existing && existing.classList.contains('marquee-text') && existing.textContent === value) {
+      return;
+    }
+    el.textContent = '';
+    el.classList.remove('is-marquee');
+    el.style.removeProperty('--marquee-distance');
+    el.style.removeProperty('--marquee-duration');
+    if (!value) return;
+    const span = document.createElement('span');
+    span.className = 'marquee-text';
+    span.textContent = value;
+    el.appendChild(span);
+    // Measure on the next frame so layout has settled. A 4px slack lets
+    // borderline cases (text ~exactly the container width) stay static
+    // instead of micro-scrolling.
+    requestAnimationFrame(() => {
+      const overflow = span.scrollWidth - el.clientWidth;
+      if (overflow > 4) {
+        const travel = overflow + 16; // +16 trailing breathing room
+        const SPEED_PX_PER_S = 40;
+        const scrollSecs = travel / SPEED_PX_PER_S;
+        const cycleSecs = (scrollSecs * 2) + 4; // +4s of held pauses each end
+        el.style.setProperty('--marquee-distance', `-${travel}px`);
+        el.style.setProperty('--marquee-duration', `${cycleSecs.toFixed(2)}s`);
+        el.classList.add('is-marquee');
+      }
+    });
+  }
+
   function renderPage() {
     if (view.page?.crumb) els.pageCrumb.textContent = view.page.crumb;
     if (view.page?.title) els.pageTitle.textContent = view.page.title;
@@ -277,7 +318,7 @@ export function initPlayer({ audio, view: initialView }) {
       row.innerHTML = `
         <div class="num">${playingHere ? '<span class="eq"><i></i><i></i><i></i><i></i></span>' : t.n}</div>
         <div class="cv${t.artwork ? ' has-art' : ''}" style="background:${coverBg(t)}"></div>
-        <div class="ti">${escapeHtml(t.title)}<div class="sub">${escapeHtml(t.album || '')}</div></div>
+        <div class="ti"><div class="ti-title">${escapeHtml(t.title)}</div><div class="sub">${escapeHtml(t.album || '')}</div></div>
         <div class="plays">${escapeHtml(t.plays || '')}</div>
         <div class="heart${liked ? ' on' : ''}" data-act="like" data-idx="${i}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>
@@ -286,6 +327,19 @@ export function initPlayer({ audio, view: initialView }) {
         <div class="more-c"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></div>
       `;
       els.trackList.appendChild(row);
+    });
+
+    // Marquee EVERY row's title + album so no name ever shows "…".
+    // Names that fit sit static; names that overflow scroll horizontally.
+    // Trade-off: in a long album the screen has multiple titles drifting
+    // simultaneously — accepted because the alternative (ellipsis) was
+    // hiding the full track name from the user.
+    const rowEls = els.trackList.querySelectorAll('.row');
+    rowEls.forEach((row, i) => {
+      const t = tracks[i];
+      if (!t) return;
+      setMarqueeText(row.querySelector('.ti-title'), t.title || '');
+      setMarqueeText(row.querySelector('.sub'), t.album || '');
     });
   }
 
@@ -361,26 +415,29 @@ export function initPlayer({ audio, view: initialView }) {
   function renderNowPlaying() {
     const t = state.currentTrack;
     if (!t) {
-      els.nowTitle.textContent = '—';
-      els.nowArtist.textContent = '';
+      setMarqueeText(els.nowTitle, '—');
+      setMarqueeText(els.nowArtist, '');
+      setMarqueeText(els.miniTitle, '—');
+      setMarqueeText(els.miniArtist, '');
       lastRenderedTrackKey = null;
       return;
     }
     const key = t.id ?? `${t.title}|${t.album}`;
     const trackChanged = key !== lastRenderedTrackKey;
     lastRenderedTrackKey = key;
-    els.nowTitle.textContent = t.title;
+    setMarqueeText(els.nowTitle, t.title);
     // Prefer the track's own artist (set when loaded from view A) over the
     // current view's hero title, so the transport keeps showing the right
     // artist after the user navigates away.
     const artistLine = t.artist || (visibleIdx() >= 0 ? view.hero?.title : '') || '';
-    els.nowArtist.textContent = artistLine ? `${artistLine} · ${t.album || ''}` : t.album || '';
+    const artistAlbumLine = artistLine ? `${artistLine} · ${t.album || ''}` : t.album || '';
+    setMarqueeText(els.nowArtist, artistAlbumLine);
     els.nowCover.style.background = coverBg(t);
     els.nowCover.classList.toggle('has-art', !!t.artwork);
     els.miniCover.style.background = coverBg(t);
     els.miniCover.classList.toggle('has-art', !!t.artwork);
-    els.miniTitle.textContent = t.title;
-    els.miniArtist.textContent = els.nowArtist.textContent;
+    setMarqueeText(els.miniTitle, t.title);
+    setMarqueeText(els.miniArtist, artistAlbumLine);
     const liked = !!t.id && state.liked.has(t.id);
     els.nowLike.classList.toggle('on', liked);
     els.nowLike.querySelector('svg').setAttribute('fill', liked ? 'currentColor' : 'none');
@@ -422,14 +479,17 @@ export function initPlayer({ audio, view: initialView }) {
   function renderFullMeta(trackChanged = false) {
     const t = state.currentTrack;
     if (!t) {
-      els.nfTitle.textContent = '—';
-      els.nfArtist.textContent = '';
+      setMarqueeText(els.nfTitle, '—');
+      setMarqueeText(els.nfArtist, '');
       els.nfCover.style.background = '';
       els.nfBg.style.background = '';
       return;
     }
-    els.nfTitle.textContent = t.title || '—';
-    els.nfArtist.textContent = els.nowArtist.textContent;
+    setMarqueeText(els.nfTitle, t.title || '—');
+    // Mirror the now-bar's already-composed "artist · album" line. The
+    // marquee setter handles the inner span; reading textContent here
+    // returns the visible text regardless of the marquee wrapper.
+    setMarqueeText(els.nfArtist, els.nowArtist.textContent);
     // Toggle clickable state — only navigate-able when we know the artist id.
     if (t.artistId && artistNavigator) {
       els.nfArtist.setAttribute('data-clickable', '');

@@ -513,8 +513,17 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   position:relative; overflow:hidden;
 }
 .row .cv::after{ content:""; position:absolute; inset:0; background: linear-gradient(135deg, rgba(255,255,255,.32), transparent 45%) }
-.row .ti{ min-width:0; overflow:hidden; font-size:13.5px; font-weight:500 }
-.row .ti, .row .ti .sub{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+/* `.ti` is now a flex column container holding `.ti-title` (the song
+   name) and `.sub` (the album). Each child handles its own width
+   constraints / ellipsis so they can independently marquee on the
+   playing row. `.ti` keeps min-width:0 so the grid track shrinks to
+   the available phone-screen width (column is minmax(0,1fr)) and
+   overflow:hidden so the marquee animation stays clipped to the cell.
+   max-width:100% is the belt-and-suspenders cap — guarantees the
+   column never bulges past the device-width slot regardless of the
+   inline-block marquee span's intrinsic width on the playing row. */
+.row .ti{ min-width:0; max-width:100%; overflow:hidden; font-size:13.5px; font-weight:500 }
+.row .ti-title, .row .ti .sub{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; min-width:0 }
 .row .ti .sub{ font-size:11.5px; color:var(--fg-mute); margin-top:2px; font-weight:400 }
 .row .plays{ font-size:12px; color:var(--fg-mute); font-variant-numeric: tabular-nums; text-align:right }
 .row .heart, .row .more-c{ display:grid; place-items:center; color:var(--fg-mute); border-radius:8px; height:28px; transition:all .15s }
@@ -612,6 +621,31 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   to  { opacity: 1; transform: translateY(0);  filter: blur(0)   }
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   MARQUEE — Apple Music-style horizontal scroll for long titles / artists.
+   The parent (.now .nm, .minibar .nm, .nf-title, etc.) already has
+   white-space:nowrap + overflow:hidden. JS wraps the text in a
+   <span class="marquee-text"> and, when scrollWidth > clientWidth, adds
+   .is-marquee + sets --marquee-distance and --marquee-duration. The
+   keyframe holds at the start, drifts to the end, holds, drifts back.
+   When the text fits, the span sits static (no animation). */
+.marquee-text{
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}
+.is-marquee .marquee-text{
+  animation: marqueeCycle var(--marquee-duration, 12s) cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes marqueeCycle{
+  0%, 12%   { transform: translateX(0) }
+  50%, 62%  { transform: translateX(var(--marquee-distance, 0px)) }
+  100%      { transform: translateX(0) }
+}
+@media (prefers-reduced-motion: reduce){
+  .is-marquee .marquee-text{ animation: none }
+}
+
 /* Heart pop — a small overshoot when a track is liked. Frequent enough to
    stay subtle (no bounce loop), satisfying enough to feel like a reaction. */
 .heart-pop{ animation: heartPop 360ms var(--ease-out-strong) }
@@ -659,8 +693,15 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   display:grid; place-items:center;
   transition: background var(--dur-press) ease, color var(--dur-press) ease, transform var(--dur-press) var(--ease-out-strong);
 }
-.cbtn:hover{ color:var(--fg); background: rgba(255,255,255,.08) }
-.cbtn:active{ transform: scale(0.92) }
+/* Hover gated behind (hover: hover) so the tint doesn't stick on touch
+   devices after a tap (Emil rule — touch hover causes false positives). */
+@media (hover: hover) and (pointer: fine){
+  .cbtn:hover{ color:var(--fg); background: rgba(255,255,255,.08) }
+}
+/* Press feedback softened from scale(0.92) → scale(0.96). 0.92 felt
+   percussive next to the rest of the player; 0.96 sits in Emil's
+   recommended 0.95–0.98 band for "responsive but elegant" press. */
+.cbtn:active{ transform: scale(0.96) }
 .cbtn.on{ color: var(--accent) }
 .play{
   width:44px; height:44px; border-radius:50%;
@@ -1178,11 +1219,18 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     left: 0; top: 0; bottom: 0;
     width: 280px; max-width: 85vw;
     z-index: 50;
-    /* Fully opaque dark panel. Neutral grays matching the app's scene
-       gradient (#4d4d4f → #0e0e10) — no blue tint — so the drawer reads
-       as part of the same surface as the page behind it. */
-    background: linear-gradient(180deg, #2a2a2c 0%, #131315 100%);
-    border-right: 1px solid rgba(255,255,255,.16);
+    /* Translucent dark panel — ~65% opaque so 35% of the background
+       refracts through (per request). Backdrop-filter handles the
+       actual blur/saturate refraction so the scrimmed app reads as a
+       softened, tinted surface behind the drawer rather than leaking
+       through sharply. */
+    background: linear-gradient(180deg, rgba(42,42,44,.66) 0%, rgba(19,19,21,.70) 100%);
+    -webkit-backdrop-filter: blur(28px) saturate(1.6);
+    backdrop-filter: blur(28px) saturate(1.6);
+    /* Right border softened from rgba(...,.16) → .04 — the bright
+       hairline was being smeared into a glow by the scrim's backdrop
+       blur, reading as a vertical bloom outside the drawer. */
+    border-right: 1px solid rgba(255,255,255,.04);
     transform: translateX(-100%);
     transition:
       transform .28s var(--ease-out-strong),
@@ -1191,7 +1239,7 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
       box-shadow .32s var(--ease-out-strong);
     padding: calc(18px + env(safe-area-inset-top)) 12px 18px;
     box-shadow:
-      inset 1px 0 0 rgba(255,255,255,.10),
+      inset 1px 0 0 rgba(255,255,255,.06),
       0 18px 50px rgba(0,0,0,.45);
   }
   /* Subtle top highlight only — drawn at normal blend so it doesn't
@@ -1206,10 +1254,15 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
      subtle distinction, still fully opaque. */
   .side.open{
     transform: translateX(0);
-    background: linear-gradient(180deg, #36363a 0%, #17171a 100%);
-    border-right-color: rgba(255,255,255,.22);
+    /* Open state lifts to ~68% opaque so the drawer reads as more
+       present, but still 32% refractive — staying in the same glass
+       family as the closed baseline. */
+    background: linear-gradient(180deg, rgba(54,54,58,.68) 0%, rgba(23,23,26,.72) 100%);
+    /* Right edge stays a near-invisible hairline so no bloom forms
+       against the scrim's backdrop blur. */
+    border-right-color: rgba(255,255,255,.06);
     box-shadow:
-      inset 1px 0 0 rgba(255,255,255,.14),
+      inset 1px 0 0 rgba(255,255,255,.08),
       0 22px 60px rgba(0,0,0,.50);
   }
   /* Scrim spans the full viewport — dims AND blurs the main app behind
@@ -1353,6 +1406,18 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
        sitting flush with the scrolling content. Pairs with the now-fuller
        tabbar so the bottom region reads as two distinct surfaces. */
     margin-top: 8px;
+    /* iOS 26 Liquid-Glass top sheen — a 1px highlight along the upper
+       edge gives the surface the look of light catching a glass slab.
+       Combined with the existing border-top hairline this reads as two
+       layered edges (sheen above, hairline below) for added depth. */
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+  }
+  .minibar::before{
+    content:"";
+    position:absolute; left:0; right:0; top:0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.18) 30%, rgba(255,255,255,.18) 70%, transparent);
+    pointer-events:none;
   }
   .minibar .cv{
     width:42px; height:42px; border-radius:9px; flex-shrink:0;
@@ -1361,9 +1426,18 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     position:relative; overflow:hidden;
   }
   .minibar .cv::after{ content:""; position:absolute; inset:0; background: linear-gradient(135deg, rgba(255,255,255,.32), transparent 45%) }
-  .minibar .info{ flex:1; min-width:0 }
-  .minibar .nm{ font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  .minibar .ar{ font-size:11px; color:var(--fg-mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  /* `min-width: 0` lets the flex item shrink to whatever space is left
+     after the cover + transport buttons, regardless of the inline-block
+     marquee span's intrinsic width. `overflow: hidden` is a defensive
+     extra clip so a wide span inside .nm/.ar can never push the .info
+     box past the available device-width slot. */
+  .minibar .info{ flex:1; min-width:0; overflow:hidden; max-width: 100% }
+  /* max-width: 100% pins the title/artist lines to the parent's measured
+     width — the inline-block marquee span's natural width never causes
+     the line to bulge past its allotted column. width:100% makes the
+     constraint explicit (block default, but clearer here). */
+  .minibar .nm{ font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; min-width:0 }
+  .minibar .ar{ font-size:11px; color:var(--fg-mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; min-width:0 }
   .minibar .actions{ display:flex; gap:2px; align-items:center }
   .minibar .actions .cbtn{ width:40px; height:40px }
   .minibar .actions .play{ width:40px; height:40px }
@@ -1389,6 +1463,16 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     -webkit-backdrop-filter: blur(20px) saturate(1.6);
     backdrop-filter: blur(20px) saturate(1.6);
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    position: relative;
+  }
+  /* iOS 26 Liquid-Glass top sheen — same trick as the minibar, gives the
+     bar a "light hits the upper edge" look on top of the existing
+     hairline border. Two stacked highlights compound into perceived depth. */
+  .tabbar::before{
+    content:"";
+    position:absolute; left:0; right:0; top:0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.22) 25%, rgba(255,255,255,.22) 75%, transparent);
+    pointer-events:none;
   }
   /* Inactive items at full --fg-dim (74%) read clearly against the dark
      tabbar; the previous --fg-mute (50%) faded into the background on
@@ -1406,10 +1490,43 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     line-height: 1.15;
     text-align: center;
     word-break: break-word;
+    /* Anchor for the active-tab glass pill (::before) and constrain its
+     bounds so the pill clips to the button's rounded shape. */
+    position: relative;
   }
+  /* iOS 26 Liquid-Glass active indicator: a translucent glass pill sits
+     BEHIND the icon + label of the on-tab. Scales in from 0.92 with a
+     custom ease (Emil rule — never from scale(0); start visible). */
+  .tabbar button::before{
+    content:"";
+    position:absolute; inset: 4px 8%;
+    border-radius: 12px;
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.14);
+    -webkit-backdrop-filter: blur(14px) saturate(1.5);
+    backdrop-filter: blur(14px) saturate(1.5);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.18),
+      0 4px 14px -6px rgba(0,0,0,.45);
+    opacity: 0;
+    transform: scale(0.92);
+    transition:
+      opacity .22s cubic-bezier(0.32, 0.72, 0, 1),
+      transform .22s cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 0;
+    pointer-events: none;
+  }
+  /* Children sit above the pill — without z-index:1 they'd be painted at
+   the same stacking level and the pill could occlude depending on order. */
+  .tabbar button > *{ position: relative; z-index: 1 }
+  .tabbar button.on::before{ opacity: 1; transform: scale(1) }
   .tabbar button svg{ opacity: .95; flex-shrink: 0 }
-  .tabbar button.on{ color: var(--accent) }
-  .tabbar button.on svg{ opacity: 1 }
+  /* Brighter shade of the same coral hue (#ff5d8f → #ff8eb0, L 68% → 78%)
+     so the active label reads clearly against the translucent glass pill.
+     The base --accent is too saturated/dark — its mid-tone lost contrast
+     once the pill's white tint sat behind it. */
+  .tabbar button.on{ color: #ff8eb0 }
+  .tabbar button.on svg{ opacity: 1; color: #ff8eb0 }
 
   /* The artist-portrait column hides on mobile, so the auto-rotation hero
      slides feel a bit empty if the rail underneath doesn't move too. The
