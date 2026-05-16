@@ -110,6 +110,7 @@ async function boot() {
   setupSearchBar(player, catalog, views, nav);
   setupSidebarNavigation(player, views, nav);
   setupBottomTabbar(player, views, nav);
+  setupViewportTracking();
 
   // Boot view — works on either catalog.
   nav.navigate(() => views.byView['for-you'](player));
@@ -161,6 +162,30 @@ function setupTweaksButton() {
   document.getElementById('tweaksBtn').addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('tweaks:toggle'));
   });
+}
+
+// Detects the real visible viewport width (window.innerWidth — excludes the
+// scrollbar in browsers where 100vw includes it) and publishes it as the
+// CSS custom property --device-w on :root. Re-runs on every resize and
+// orientation change so layout-dependent caps (e.g. the playing-row title
+// max-width in styles.css) always match the actual device dimensions.
+// rAF-throttled so a fast drag of the browser window doesn't fire thousands
+// of style recalcs.
+function setupViewportTracking() {
+  let pending = false;
+  const sync = () => {
+    pending = false;
+    document.documentElement.style.setProperty('--device-w', `${window.innerWidth}px`);
+    document.documentElement.style.setProperty('--device-h', `${window.innerHeight}px`);
+  };
+  const schedule = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(sync);
+  };
+  sync();
+  window.addEventListener('resize', schedule);
+  window.addEventListener('orientationchange', schedule);
 }
 
 // ── Navigation history (browser-style back/forward) ───────────────────────

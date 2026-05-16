@@ -488,7 +488,20 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
 .section-title .more{ font-size:12px; color: var(--accent); font-weight:600; cursor:pointer }
 
 /* Track list */
-.tracks{ display:flex; flex-direction:column; gap:1px }
+.tracks{
+  display:flex; flex-direction:column; gap:1px;
+  /* 5% less than detected device width, anchored to the LEFT edge so
+     the list aligns with the hero + section title above it (centering
+     with margin:auto created a visible offset where the list floated
+     while the hero stayed flush left). The 5% trim shows up as gutter
+     on the right side only — same anchor point as the rest of the
+     .main content above. */
+  max-width: calc(var(--device-w, 100vw) * 0.95);
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  box-sizing: border-box;
+}
 .row{
   display:grid;
   grid-template-columns: 28px 44px minmax(0,1fr) 110px 36px 48px 28px;
@@ -722,8 +735,10 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
   animation: marqueeCycle var(--marquee-duration, 12s) cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 @keyframes marqueeCycle{
-  0%, 12%   { transform: translateX(0) }
-  50%, 62%  { transform: translateX(var(--marquee-distance, 0px)) }
+  /* Zero held pauses — scroll begins instantly so the user sees motion
+     before any chance to perceive a "clipped" static state. */
+  0%        { transform: translateX(0) }
+  48%, 52%  { transform: translateX(var(--marquee-distance, 0px)) }
   100%      { transform: translateX(0) }
 }
 @media (prefers-reduced-motion: reduce){
@@ -1465,14 +1480,57 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
      they take exactly the width their content needs — never get pushed
      off-screen by an over-eager 1fr title. Title gets a guaranteed
      min-width:0 via minmax(0,1fr). */
+  /* Track number column is fixed-width (24px) so the .eq equalizer bars
+     that replace the digit on .playing rows don't widen the column —
+     auto-sizing would let the eq's 16px footprint nudge the layout vs.
+     the 7-10px digit. Fixed track = identical column widths whether the
+     row is playing or not, so the .ti column never shifts when the
+     playing class flips. Same logic for .dur (min-width was enough but
+     fixing it removes one more variable). */
+  /* Every track-row column is now a FIXED pixel width except the title
+     column (1fr). That way the title column is the ONLY column whose
+     width varies between playing / non-playing rows — and since the
+     equalizer that replaces the digit on .playing is sized to fit the
+     fixed 24px num column, even the title column width is identical.
+     min-width:0 on .row plus overflow:hidden keep the row from ever
+     bulging beyond its parent regardless of what's inside the title. */
   .row{
-    grid-template-columns: auto 40px minmax(0,1fr) auto auto;
+    grid-template-columns: 24px 40px minmax(0,1fr) 36px 36px;
     gap: 8px;
     padding: 8px 4px;
+    min-width: 0;
+    overflow: hidden;
   }
   .row .plays, .row .more-c{ display:none }
-  .row .num{ min-width: 18px; text-align: center }
-  .row .dur{ padding-right: 4px; min-width: 32px }
+  .row .num{ width: 24px; min-width: 24px; max-width: 24px; text-align: center }
+  .row .dur{ width: 36px; min-width: 36px; max-width: 36px; padding-right: 4px; text-align: right }
+  /* Fully fluid — the grid track `minmax(0,1fr)` gives the title column
+     whatever space is left after the cover + trailing icons. On a 320px
+     phone that's ~180px, on a 768px tablet that's ~580px. No fixed
+     pixel cap so the column always matches the device width. The
+     marquee handles overflow by scrolling (see setMarqueeText in
+     player.js + ResizeObserver re-measurement on resize). */
+  .row .ti{ max-width: 100%; min-width: 0; width: 100% }
+  .row .ti-title, .row .ti .sub{ max-width: 100%; min-width: 0; width: 100% }
+  /* Playing row stays visually identical to every other row — same
+     width, same grid columns, same paddings. The only difference is
+     the pink-tinted background + accent num color. The marquee handles
+     long titles without changing the row's footprint.
+
+     Safety-net cap: max-width: var(--device-w) hard-guarantees that
+     the .row.playing element can never paint wider than the detected
+     viewport (--device-w is updated on resize/rotation by
+     setupViewportTracking in main.js). It's a no-op in normal
+     conditions — the row is already inside .main inside .app whose
+     max-width is 100vw — but provides explicit insurance against any
+     CSS path that might try to bulge it (e.g. an inline-block child's
+     intrinsic width overriding minmax(0,1fr)). No visual difference
+     vs. non-playing rows because the cap is the full viewport, not a
+     fraction of it. */
+  .row.playing{
+    max-width: var(--device-w, 100vw);
+    box-sizing: border-box;
+  }
   /* Touch targets for the per-row controls. */
   .row .heart, .row .more-c{ height: 34px; width: 34px }
 
@@ -1496,6 +1554,14 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
        layered edges (sheen above, hairline below) for added depth. */
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
+    /* Match the detected screen width exactly — fills full device
+     width edge-to-edge so the bar reads as a continuous bottom
+     surface, no right-edge gutter. */
+    max-width: var(--device-w, 100vw);
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    box-sizing: border-box;
   }
   .minibar::before{
     content:"";
@@ -1548,6 +1614,14 @@ button, .side-item, .row, .card, .seg, .user-pill, .ibtn, .cbtn, .menu-btn{
     backdrop-filter: blur(20px) saturate(1.6);
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
     position: relative;
+    /* Match the detected screen width exactly — all 5 tabs span the
+     full device width edge-to-edge, no right-edge gutter that would
+     have offset the Search tab inward. */
+    max-width: var(--device-w, 100vw);
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    box-sizing: border-box;
   }
   /* iOS 26 Liquid-Glass top sheen — same trick as the minibar, gives the
      bar a "light hits the upper edge" look on top of the existing

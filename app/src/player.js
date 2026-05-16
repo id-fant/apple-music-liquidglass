@@ -174,12 +174,43 @@ export function initPlayer({ audio: initialAudio, view: initialView }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // Apple Music-style horizontal marquee for fixed-width title/artist
+  // Apple Music-style horizontal marquee for fluid-width title/artist
   // labels. Wraps the text in a child <span.marquee-text> so the parent's
   // existing nowrap+overflow:hidden frames it; measures after layout and
   // toggles .is-marquee with --marquee-distance / --marquee-duration only
-  // when the text actually overflows. Keeps the container width fixed —
-  // names that fit sit static, names that don't scroll smoothly.
+  // when the text actually overflows. Container width is whatever the
+  // parent layout gives it (responsive). A shared ResizeObserver
+  // re-measures on every parent-width change (resize, orientation,
+  // "See all" toggle) so the marquee never gets stuck on a stale
+  // measurement.
+  const marqueeMap = new WeakMap(); // el → text (for re-measurement)
+  const marqueeRO = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const text = marqueeMap.get(entry.target);
+      if (text != null) measureMarquee(entry.target, text);
+    }
+  });
+
+  function measureMarquee(el, value) {
+    const span = el.firstElementChild;
+    if (!span || !span.classList.contains('marquee-text')) return;
+    // Reset before re-measuring so a previously-overflowing element that
+    // now fits stops scrolling (and vice versa).
+    el.classList.remove('is-marquee');
+    el.style.removeProperty('--marquee-distance');
+    el.style.removeProperty('--marquee-duration');
+    const overflow = span.scrollWidth - el.clientWidth;
+    if (overflow > 4) {
+      const travel = overflow + 16; // +16 trailing breathing room
+      const SPEED_PX_PER_S = 40;
+      const scrollSecs = travel / SPEED_PX_PER_S;
+      const cycleSecs = (scrollSecs * 2) + 4; // +4s of held pauses each end
+      el.style.setProperty('--marquee-distance', `-${travel}px`);
+      el.style.setProperty('--marquee-duration', `${cycleSecs.toFixed(2)}s`);
+      el.classList.add('is-marquee');
+    }
+  }
+
   function setMarqueeText(el, text) {
     if (!el) return;
     const value = text || '';
@@ -187,31 +218,30 @@ export function initPlayer({ audio: initialAudio, view: initialView }) {
     // Reuse the span if the text hasn't changed — avoids tearing down the
     // animation on every re-render (track ticks, like toggles, etc.).
     if (existing && existing.classList.contains('marquee-text') && existing.textContent === value) {
+      marqueeMap.set(el, value);
       return;
     }
     el.textContent = '';
     el.classList.remove('is-marquee');
     el.style.removeProperty('--marquee-distance');
     el.style.removeProperty('--marquee-duration');
+    marqueeMap.delete(el);
+    try { marqueeRO.unobserve(el); } catch {}
     if (!value) return;
     const span = document.createElement('span');
     span.className = 'marquee-text';
     span.textContent = value;
     el.appendChild(span);
-    // Measure on the next frame so layout has settled. A 4px slack lets
-    // borderline cases (text ~exactly the container width) stay static
-    // instead of micro-scrolling.
+    marqueeMap.set(el, value);
+    // Double-rAF so layout has definitely settled (some browsers settle
+    // grid/flex sizes on the second frame after content insertion).
     requestAnimationFrame(() => {
-      const overflow = span.scrollWidth - el.clientWidth;
-      if (overflow > 4) {
-        const travel = overflow + 16; // +16 trailing breathing room
-        const SPEED_PX_PER_S = 40;
-        const scrollSecs = travel / SPEED_PX_PER_S;
-        const cycleSecs = (scrollSecs * 2) + 4; // +4s of held pauses each end
-        el.style.setProperty('--marquee-distance', `-${travel}px`);
-        el.style.setProperty('--marquee-duration', `${cycleSecs.toFixed(2)}s`);
-        el.classList.add('is-marquee');
-      }
+      requestAnimationFrame(() => {
+        measureMarquee(el, value);
+        // Subscribe to future size changes so marquee picks up resize,
+        // orientation change, drawer open/close, "See all" toggle, etc.
+        marqueeRO.observe(el);
+      });
     });
   }
 
