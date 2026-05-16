@@ -7,7 +7,7 @@
 //   Artist   { id, name, artwork, followers, genres }
 //   Playlist { id, name, artwork, owner, trackCount }
 
-import { spotifyFetch } from './api.js';
+import { spotifyFetch, spotifyRequest } from './api.js';
 import { nextFeaturedArtist } from '../featured-artists.js';
 
 const MARKET = 'from_token'; // resolves to the connected account's market
@@ -198,6 +198,119 @@ export async function fetchSavedAlbums(limit = 30) {
 export async function fetchFollowedArtists(limit = 30) {
   const res = await spotifyFetch('/v1/me/following', { type: 'artist', limit });
   return (res.artists?.items || []).map(shapeArtist);
+}
+
+// ── Library save/unsave/check (heart-icon sync) ────────────────────────────
+//
+// Spotify's "Liked Songs" — these mutate the user's library and require the
+// `user-library-modify` scope. The check endpoint returns a parallel array
+// of booleans for whichever ids we pass.
+
+export async function saveTracks(ids) {
+  const list = Array.isArray(ids) ? ids : [ids];
+  if (!list.length) return;
+  // Max 50 ids per call per Spotify spec.
+  for (let i = 0; i < list.length; i += 50) {
+    await spotifyRequest('PUT', '/v1/me/tracks', {
+      params: { ids: list.slice(i, i + 50).join(',') },
+    });
+  }
+}
+
+export async function removeSavedTracks(ids) {
+  const list = Array.isArray(ids) ? ids : [ids];
+  if (!list.length) return;
+  for (let i = 0; i < list.length; i += 50) {
+    await spotifyRequest('DELETE', '/v1/me/tracks', {
+      params: { ids: list.slice(i, i + 50).join(',') },
+    });
+  }
+}
+
+// Returns an object keyed by id → boolean. Batches into 50s.
+export async function checkSavedTracks(ids) {
+  const list = Array.isArray(ids) ? ids : [ids];
+  const out = {};
+  if (!list.length) return out;
+  for (let i = 0; i < list.length; i += 50) {
+    const batch = list.slice(i, i + 50);
+    const result = await spotifyFetch('/v1/me/tracks/contains', {
+      ids: batch.join(','),
+    });
+    batch.forEach((id, idx) => { out[id] = !!result[idx]; });
+  }
+  return out;
+}
+
+// ── Playback (transport / queue / state) ───────────────────────────────────
+//
+// Use the user's connected device — the Web Playback SDK registers our
+// browser as a Spotify Connect device, and these helpers control whichever
+// device is currently active. Passing `deviceId` targets a specific one
+// (e.g. our SDK's device) instead of the user's last-used.
+
+export async function transferPlayback(deviceId, play = true) {
+  await spotifyRequest('PUT', '/v1/me/player', {
+    body: { device_ids: [deviceId], play },
+  });
+}
+
+export async function playTracks({ uris, contextUri, offset, positionMs, deviceId } = {}) {
+  const body = {};
+  if (uris) body.uris = uris;
+  if (contextUri) body.context_uri = contextUri;
+  if (offset != null) body.offset = typeof offset === 'number' ? { position: offset } : offset;
+  if (positionMs != null) body.position_ms = positionMs;
+  const params = deviceId ? { device_id: deviceId } : null;
+  await spotifyRequest('PUT', '/v1/me/player/play', { params, body });
+}
+
+export async function pausePlayback(deviceId) {
+  const params = deviceId ? { device_id: deviceId } : null;
+  await spotifyRequest('PUT', '/v1/me/player/pause', { params });
+}
+
+export async function nextTrack(deviceId) {
+  const params = deviceId ? { device_id: deviceId } : null;
+  await spotifyRequest('POST', '/v1/me/player/next', { params });
+}
+
+export async function previousTrack(deviceId) {
+  const params = deviceId ? { device_id: deviceId } : null;
+  await spotifyRequest('POST', '/v1/me/player/previous', { params });
+}
+
+export async function seekTo(positionMs, deviceId) {
+  const params = { position_ms: Math.max(0, Math.round(positionMs)) };
+  if (deviceId) params.device_id = deviceId;
+  await spotifyRequest('PUT', '/v1/me/player/seek', { params });
+}
+
+export async function setVolume(volumePercent, deviceId) {
+  const params = { volume_percent: Math.max(0, Math.min(100, Math.round(volumePercent))) };
+  if (deviceId) params.device_id = deviceId;
+  await spotifyRequest('PUT', '/v1/me/player/volume', { params });
+}
+
+export async function addToQueue(trackUri, deviceId) {
+  const params = { uri: trackUri };
+  if (deviceId) params.device_id = deviceId;
+  await spotifyRequest('POST', '/v1/me/player/queue', { params });
+}
+
+export async function fetchPlaybackState() {
+  // Returns null when no active device — caller treats as "nothing playing".
+  return spotifyFetch('/v1/me/player', { market: MARKET });
+}
+
+export async function fetchQueue() {
+  // Returns { currently_playing, queue: [tracks] }. Shape the queue items
+  // through the existing shapeTrack so the UI consumes the familiar form.
+  const res = await spotifyFetch('/v1/me/player/queue');
+  return {
+    currentlyPlaying: res?.currently_playing ? shapeTrack(res.currently_playing) : null,
+    queue: (res?.queue || []).map((t, i) => shapeTrack(t, i)),
+  };
 }
 
 // ── Browse ─────────────────────────────────────────────────────────────────

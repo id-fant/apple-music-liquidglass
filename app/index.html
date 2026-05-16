@@ -164,7 +164,7 @@
       <!-- Albums rail -->
       <div class="section-title" id="railSectionTitle">
         <h3 id="railSectionH3">Discography</h3>
-        <span class="more">See all</span>
+        <span class="more" data-target="rail" role="button" tabindex="0">See all</span>
       </div>
       <div class="rail" id="rail">
         <div class="card">
@@ -201,7 +201,7 @@
            catalog reports any singles. Hidden whenever empty. -->
       <div class="section-title" id="singlesRailSectionTitle" style="display:none">
         <h3 id="singlesRailSectionH3">Singles</h3>
-        <span class="more">See all</span>
+        <span class="more" data-target="singlesRail" role="button" tabindex="0">See all</span>
       </div>
       <div class="rail" id="singlesRail" style="display:none"></div>
 
@@ -393,6 +393,9 @@
 <audio id="audio" preload="metadata"></audio>
 <div id="tweaks-root"></div>
 
+<!-- Spotify Web Playback SDK is loaded lazily by spotify/playback.js when
+     the user is in Spotify mode + Premium-accepted. Loading it here would
+     ship the script even to free / iTunes-mode users. -->
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

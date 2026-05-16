@@ -60,13 +60,24 @@ export function staticArtistView({ artist, tracks }) {
   };
 }
 
-export function initPlayer({ audio, view: initialView }) {
+export function initPlayer({ audio: initialAudio, view: initialView }) {
   let view = initialView;
   let tracks = view.tracks?.items || [];
   // Wired by main.js after the views/navigator exist; called when the user
   // clicks the artist line in the fullscreen player to jump to that artist's
   // discography. Stays null until registered (no-ops then).
   let artistNavigator = null;
+
+  // Mutable audio engine reference — main.js can swap from the local
+  // <audio>-based engine to the Spotify Web Playback SDK engine once
+  // Premium is confirmed. Use a closure-mutable binding (not const) so
+  // every transport handler reads the current engine.
+  let audio = initialAudio;
+
+  // Optional Spotify-library sync (set by main.js in Spotify mode). Each
+  // entry is async; we fire-and-forget so the heart icon stays snappy.
+  let librarySync = null;        // { save(id), remove(id), check(ids[]) }
+  let queueAdder = null;         // (trackId) → Promise
 
   // Likes are keyed by track id (so they survive view changes and reloads),
   // backed by localStorage. The Set holds whatever string ids the catalogs
@@ -324,7 +335,7 @@ export function initPlayer({ audio, view: initialView }) {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>
         </div>
         <div class="dur">${escapeHtml(t.duration)}</div>
-        <div class="more-c"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></div>
+        <div class="more-c" data-act="more" data-idx="${i}" role="button" aria-label="Track options"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></div>
       `;
       els.trackList.appendChild(row);
     });
@@ -697,9 +708,24 @@ export function initPlayer({ audio, view: initialView }) {
 
   function toggleLikeByTrackId(id) {
     if (!id) return false;
-    if (state.liked.has(id)) state.liked.delete(id);
+    const wasLiked = state.liked.has(id);
+    if (wasLiked) state.liked.delete(id);
     else state.liked.add(id);
     persistLikes();
+    // Mirror to Spotify library when sync is wired. Fire-and-forget so the
+    // heart icon flips instantly; if the API call fails, we log and roll
+    // back the local state so the icon stays truthful.
+    if (librarySync) {
+      const op = wasLiked ? librarySync.remove(id) : librarySync.save(id);
+      Promise.resolve(op).catch((err) => {
+        console.warn('[Spotify] library sync failed:', err.message);
+        if (wasLiked) state.liked.add(id);
+        else state.liked.delete(id);
+        persistLikes();
+        renderTrackSection();
+        renderNowPlaying();
+      });
+    }
     return true;
   }
 
@@ -723,6 +749,155 @@ export function initPlayer({ audio, view: initialView }) {
     }
   }
 
+  // ── Track-row context menu (3-dots) ───────────────────────────────────────
+  //
+  // Single shared popover, lazily created and re-used across rows. Anchored
+  // to the clicked .more-c via fixed positioning + getBoundingClientRect.
+  // Items: Add to Queue (Spotify-only), Go to Artist, Like / Unlike,
+  // Copy Link, Open in Spotify (Spotify-only). Click outside or Esc closes.
+
+  let rowMenuEl = null;
+  let rowMenuClose = null;
+
+  function ensureRowMenu() {
+    if (rowMenuEl) return rowMenuEl;
+    rowMenuEl = document.createElement('div');
+    rowMenuEl.className = 'row-menu';
+    rowMenuEl.setAttribute('role', 'menu');
+    document.body.appendChild(rowMenuEl);
+    return rowMenuEl;
+  }
+
+  function closeRowMenu() {
+    if (!rowMenuEl) return;
+    rowMenuEl.classList.remove('open');
+    if (rowMenuClose) {
+      document.removeEventListener('mousedown', rowMenuClose, true);
+      document.removeEventListener('keydown', rowMenuCloseKey, true);
+      window.removeEventListener('scroll', rowMenuClose, true);
+      window.removeEventListener('resize', rowMenuClose, true);
+      rowMenuClose = null;
+    }
+  }
+  function rowMenuCloseKey(e) {
+    if (e.key === 'Escape') closeRowMenu();
+  }
+
+  function openRowMenu(idx, anchorEl) {
+    const t = tracks[idx];
+    if (!t) return;
+    // If the menu is already open on this row, toggle closed.
+    if (rowMenuEl?.classList.contains('open') && rowMenuEl.dataset.idx === String(idx)) {
+      closeRowMenu();
+      return;
+    }
+    closeRowMenu();
+    const menu = ensureRowMenu();
+    menu.dataset.idx = String(idx);
+
+    const liked = !!t.id && state.liked.has(t.id);
+    const items = [];
+    if (queueAdder && t.id) {
+      items.push({
+        label: 'Add to Queue',
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h13M3 12h13M3 18h9M19 14v6M16 17h6"/></svg>',
+        onClick: () => {
+          Promise.resolve(queueAdder(t.id))
+            .then(() => console.info(`[Queue] Added "${t.title}"`))
+            .catch((err) => console.warn('[Queue] add failed:', err.message));
+        },
+      });
+    }
+    if (artistNavigator && t.artistId) {
+      items.push({
+        label: 'Go to Artist',
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>',
+        onClick: () => artistNavigator(t.artistId),
+      });
+    }
+    items.push({
+      label: liked ? 'Unlike' : 'Like',
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>`,
+      onClick: () => toggleLike(idx),
+    });
+    items.push({
+      label: 'Copy Link',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+      onClick: () => {
+        const link = t.id ? `https://open.spotify.com/track/${t.id}` : t.title;
+        navigator.clipboard?.writeText(link).catch(() => {});
+      },
+    });
+    if (t.id && queueAdder) {
+      items.push({
+        label: 'Open in Spotify',
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>',
+        onClick: () => window.open(`https://open.spotify.com/track/${t.id}`, '_blank', 'noopener'),
+      });
+    }
+
+    menu.innerHTML = items.map((it, i) => `
+      <button class="row-menu-item" data-i="${i}" role="menuitem">
+        <span class="row-menu-ic">${it.icon}</span>
+        <span>${it.label}</span>
+      </button>
+    `).join('');
+
+    menu.querySelectorAll('.row-menu-item').forEach((btn, i) => {
+      btn.addEventListener('click', () => {
+        items[i].onClick();
+        closeRowMenu();
+      });
+    });
+
+    // Position: open below the anchor, right-aligned to it. If the menu
+    // would overflow the viewport bottom, flip above.
+    menu.classList.add('open');  // un-hide so width/height measure correctly
+    const rect = anchorEl.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const margin = 6;
+    let top = rect.bottom + margin;
+    if (top + menuRect.height > window.innerHeight - 8) {
+      top = rect.top - menuRect.height - margin;
+    }
+    let left = rect.right - menuRect.width;  // right-align to anchor
+    if (left < 8) left = 8;
+    if (left + menuRect.width > window.innerWidth - 8) {
+      left = window.innerWidth - menuRect.width - 8;
+    }
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+
+    // Click-outside / Esc / scroll closes.
+    rowMenuClose = (e) => {
+      if (e && e.type === 'mousedown' && menu.contains(e.target)) return;
+      closeRowMenu();
+    };
+    setTimeout(() => {
+      document.addEventListener('mousedown', rowMenuClose, true);
+      document.addEventListener('keydown', rowMenuCloseKey, true);
+      window.addEventListener('scroll', rowMenuClose, true);
+      window.addEventListener('resize', rowMenuClose, true);
+    }, 0);
+  }
+
+  // ── "See all" toggles — flip a rail from horizontal scroll to a
+  // wrapping grid (and back). Each `.more[data-target=...]` controls the
+  // rail with the matching id (rail / singlesRail). Toggles a `.grid-mode`
+  // class on the rail; CSS swaps the layout.
+  document.querySelectorAll('.section-title .more[data-target]').forEach((btn) => {
+    const toggle = () => {
+      const rail = document.getElementById(btn.dataset.target);
+      if (!rail) return;
+      const isGrid = rail.classList.toggle('grid-mode');
+      btn.textContent = isGrid ? 'Show less' : 'See all';
+    };
+    btn.addEventListener('click', toggle);
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
   // ── Wire-up ───────────────────────────────────────────────────────────────
 
   els.trackList.addEventListener('click', (e) => {
@@ -730,6 +905,12 @@ export function initPlayer({ audio, view: initialView }) {
     if (heart) {
       e.stopPropagation();
       toggleLike(Number(heart.dataset.idx));
+      return;
+    }
+    const more = e.target.closest('[data-act="more"]');
+    if (more) {
+      e.stopPropagation();
+      openRowMenu(Number(more.dataset.idx), more);
       return;
     }
     const row = e.target.closest('.row');
@@ -1116,6 +1297,56 @@ export function initPlayer({ audio, view: initialView }) {
       // Re-render fullscreen meta so the clickable affordances pick up
       // immediately if the player was already populated before this was wired.
       renderFullMeta();
+    },
+    // Swap the audio engine after init (e.g. local <audio> → Spotify Web
+    // Playback SDK once Premium is confirmed). Re-subscribes time/end
+    // listeners and re-loads the currently-loaded track so playback can
+    // resume on the new engine if the user hits play.
+    setAudioEngine(newEngine) {
+      if (!newEngine) return;
+      audio = newEngine;
+      audio.on('time', (current, duration) => {
+        state.progress = duration > 0 ? current / duration : 0;
+        lastDuration = duration;
+        els.curTime.textContent = formatTime(current);
+        els.totTime.textContent = formatTime(duration);
+        els.nfCur.textContent = formatTime(current);
+        els.nfRem.textContent = formatTime(Math.max(0, duration - current));
+        renderProgress();
+      });
+      audio.on('end', () => {
+        if (state.repeat) { state.progress = 0; audio.seek(0); audio.play(); }
+        else next();
+      });
+      audio.setVolume(state.volume);
+      if (state.currentTrack) audio.load(state.currentTrack);
+    },
+    // Wire the heart icon to mirror the user's Spotify library. Each call
+    // is fire-and-forget; rollback on failure handled in toggleLikeByTrackId.
+    setLibrarySync(sync) {
+      librarySync = sync;
+      // Hydrate liked state for already-rendered tracks so the icons
+      // reflect the user's real library on first paint.
+      if (sync?.check && tracks.length) {
+        const ids = tracks.map((t) => t.id).filter(Boolean);
+        sync.check(ids).then((map) => {
+          let changed = false;
+          for (const [id, isSaved] of Object.entries(map)) {
+            if (isSaved && !state.liked.has(id)) { state.liked.add(id); changed = true; }
+          }
+          if (changed) {
+            persistLikes();
+            renderTrackSection();
+            renderNowPlaying();
+          }
+        }).catch((err) => console.warn('[Spotify] initial library check failed:', err.message));
+      }
+    },
+    // Wire add-to-queue. Queue panel UI is a follow-up — this just enables
+    // the Web API call. Hook into the More-sheet "Playing Next" or a
+    // future right-click affordance.
+    setQueueAdder(fn) {
+      queueAdder = fn;
     },
     setView(newView) {
       view = newView;

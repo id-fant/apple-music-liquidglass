@@ -18,16 +18,20 @@ const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
 // The same value must be registered in the Spotify dashboard.
 const REDIRECT_URI = window.location.origin + '/';
 
-// `streaming` is for the Web Playback SDK (full songs, Premium-only) —
-// keeping it now means no re-auth later when we add full playback. The
-// rest cover everything the sidebar / library / browse views read.
+// `streaming` is for the Web Playback SDK (full songs, Premium-only).
+// `user-library-modify` enables save/unsave tracks (heart icon syncs).
+// `user-modify-playback-state` enables transport control + queue adds.
+// `user-read-playback-state` is required for current playback / queue reads.
 const SCOPES = [
   'user-read-private',
   'user-read-email',
   'streaming',
   'user-top-read',
   'user-library-read',
+  'user-library-modify',
   'user-follow-read',
+  'user-read-playback-state',
+  'user-modify-playback-state',
   'playlist-read-private',
   'playlist-read-collaborative',
 ];

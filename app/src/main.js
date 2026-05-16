@@ -10,6 +10,7 @@ import {
 import * as spotifyCatalog from './spotify/catalog.js';
 import * as itunesCatalog from './itunes/catalog.js';
 import { createAudioEngine } from './audio-engine.js';
+import { createSpotifyEngine } from './spotify/playback.js';
 import { initPlayer, staticArtistView } from './player.js';
 import { createViews } from './views.js';
 import { mountTweaks } from './tweaks/mount.jsx';
@@ -55,7 +56,11 @@ async function boot() {
   await handleCallback();
 
   const audioEl = document.getElementById('audio');
-  const engine = createAudioEngine(audioEl);
+  // Start with the local-audio engine so the first paint has SOMETHING to
+  // hand to player.js — we swap in the Spotify engine after we know the
+  // user is in Spotify mode (Premium accepted). Swap-out is handled by
+  // player.setAudioEngine() below.
+  let engine = createAudioEngine(audioEl);
 
   // The static artist view paints first frame instantly; the live data
   // takes over as soon as the catalog returns.
@@ -69,6 +74,31 @@ async function boot() {
   const { catalog, source, authBlocked } = await pickCatalog();
   const nav = createNavigator();
   const views = createViews(catalog, nav.navigate, { authBlocked, source });
+
+  // Spotify Premium path: replace the local <audio>-based engine with the
+  // Web Playback SDK so full songs (not 30s previews) play through the
+  // browser as a Spotify Connect device. If the SDK init fails for any
+  // reason (no Premium, network, blocked), we stay on the local engine
+  // and the user still gets the preview-based experience.
+  if (source === 'spotify') {
+    createSpotifyEngine()
+      .then((spotifyEngine) => {
+        player.setAudioEngine(spotifyEngine);
+        console.info('[Spotify] Web Playback SDK ready — full songs enabled.');
+      })
+      .catch((err) => {
+        console.warn('[Spotify] Web Playback SDK init failed:', err.message);
+      });
+    // Tell the player to sync likes against the user's Spotify library
+    // (replaces the localStorage-only behaviour for iTunes mode).
+    player.setLibrarySync({
+      save: (id) => catalog.saveTracks([id]),
+      remove: (id) => catalog.removeSavedTracks([id]),
+      check: (ids) => catalog.checkSavedTracks(ids),
+    });
+    // Add-to-queue API hookup. Queue panel UI is a follow-up build.
+    player.setQueueAdder((id) => catalog.addToQueue(`spotify:track:${id}`));
+  }
 
   // Wire fullscreen artist-line → artist discography navigation. Done here
   // (not at initPlayer) because views + nav don't exist that early.
