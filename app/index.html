@@ -7,6 +7,20 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c1d20'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='22' font-family='serif' fill='%23f6f8fb'%3EL%3C/text%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Warm DNS + TLS to Apple's APIs during HTML parse so the first iTunes
+     / charts request after boot doesn't pay the 200-500ms handshake cost.
+     dns-prefetch is a cheaper fallback for older browsers that ignore
+     preconnect. Production proxies through Vercel rewrites (same-origin),
+     so these only help in dev — but the dev experience is what we tune. -->
+<link rel="preconnect" href="https://itunes.apple.com" crossorigin />
+<link rel="preconnect" href="https://rss.marketingtools.apple.com" crossorigin />
+<link rel="dns-prefetch" href="https://itunes.apple.com" />
+<link rel="dns-prefetch" href="https://rss.marketingtools.apple.com" />
+<link rel="preconnect" href="https://is1-ssl.mzstatic.com" crossorigin />
+<link rel="preconnect" href="https://is2-ssl.mzstatic.com" crossorigin />
+<link rel="preconnect" href="https://is3-ssl.mzstatic.com" crossorigin />
+<link rel="preconnect" href="https://is4-ssl.mzstatic.com" crossorigin />
+<link rel="preconnect" href="https://is5-ssl.mzstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 </head>
 <body>
