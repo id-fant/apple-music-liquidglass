@@ -152,8 +152,30 @@ function setupSignInButton() {
     });
   } else {
     btn.title = 'Connect Spotify';
-    btn.addEventListener('click', () => {
-      startAuth().catch((err) => console.error('Auth start failed:', err));
+    let pending = false;
+    btn.addEventListener('click', async () => {
+      // Guard against the user spam-tapping while the async PKCE setup
+      // (crypto.subtle.digest + sessionStorage write) is in flight. On
+      // mobile this takes 50-200ms — without the guard the user would
+      // re-tap thinking the first one missed, queueing duplicate auth
+      // attempts that race the location.href redirect.
+      if (pending) return;
+      pending = true;
+      btn.classList.add('is-pending');
+      btn.disabled = true;
+      btn.title = 'Connecting…';
+      try {
+        await startAuth();
+        // startAuth navigates away; we never actually reach this line in
+        // the happy path. Reset state in case it returns without nav
+        // (e.g. CLIENT_ID missing).
+      } catch (err) {
+        console.error('Auth start failed:', err);
+        pending = false;
+        btn.classList.remove('is-pending');
+        btn.disabled = false;
+        btn.title = 'Connect Spotify';
+      }
     });
   }
 }
