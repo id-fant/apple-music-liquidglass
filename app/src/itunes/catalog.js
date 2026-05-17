@@ -120,10 +120,30 @@ export async function getArtistFull(artistId) {
   };
 }
 
+// Strip multi-artist credit suffixes so "Drake, Future & Molly Santana"
+// or "Kendrick Lamar feat. SZA" reduces to just the primary artist.
+// Chart entries arrive as the full credit string; iTunes search needs a
+// single artist name to match anything.
+function primaryArtistName(s) {
+  if (!s) return '';
+  return s
+    .split(/\s*(?:,|&|\bfeat\.?\b|\bfeaturing\b|\bft\.?\b|\bx\b|\bvs\.?\b|\bwith\b)\s*/i)[0]
+    .trim();
+}
+
 export async function findArtistByName(query) {
-  const list = await searchArtists(query, 1);
-  if (!list.length) throw new Error(`No artist found for "${query}"`);
-  return getArtistFull(list[0].id);
+  if (!query) throw new Error('No artist query');
+  // First try the full string (handles solo artists with commas/ampersands
+  // in their name, e.g. "Earth, Wind & Fire").
+  let list = await searchArtists(query, 1);
+  if (list.length) return getArtistFull(list[0].id);
+  // Fall back to the primary artist extracted from a multi-artist credit.
+  const primary = primaryArtistName(query);
+  if (primary && primary !== query) {
+    list = await searchArtists(primary, 1);
+    if (list.length) return getArtistFull(list[0].id);
+  }
+  throw new Error(`No artist found for "${query}"`);
 }
 
 export async function getAlbumFull(albumId) {
@@ -184,9 +204,26 @@ export async function fetchPrimaryArtist() {
     // Chart unreachable — fall back to the static rotation.
     return findArtistByName(nextFeaturedArtist());
   }
-  const name = names[chartArtistsIdx % names.length];
-  chartArtistsIdx++;
-  return findArtistByName(name);
+  // Walk through chart entries starting at the rotation index. If one
+  // can't resolve (multi-artist credit that doesn't reduce to a real
+  // artist, a rare name with zero search matches, etc.) try the next
+  // one instead of failing the whole For You boot. Only fall back to
+  // the static rotation when every chart entry fails.
+  const startIdx = chartArtistsIdx;
+  for (let attempt = 0; attempt < names.length; attempt++) {
+    const idx = (startIdx + attempt) % names.length;
+    const name = names[idx];
+    try {
+      const data = await findArtistByName(name);
+      chartArtistsIdx = (idx + 1) % names.length;
+      return data;
+    } catch (err) {
+      console.warn(`[Charts] Skipping featured artist "${name}":`, err.message);
+    }
+  }
+  // Every chart entry failed — final fallback.
+  console.warn('[Charts] All featured artists failed to resolve; using static rotation.');
+  return findArtistByName(nextFeaturedArtist());
 }
 
 // Radio view: top songs chart, hydrated with preview URLs via one batch
