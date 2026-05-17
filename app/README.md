@@ -99,6 +99,18 @@ Connecting Spotify unlocks user-library views (Recently Added, Songs, Albums, Ar
 - **Active row equalizer** — four animated bars replace the track number on the currently-playing row.
 - **`prefers-reduced-motion`** clamps all animations and transitions to ~0ms.
 
+### Performance
+
+- **iTunes API cache** (`src/itunes/api.js`) — in-memory `Map` keyed by full URL. Search/lookup TTL is 15 minutes, charts TTL is 1 hour. Capped at 200 entries with FIFO eviction so memory doesn't drift on heavy navigation. Cleared on page reload (no stale-data concerns).
+- **Request deduplication** — concurrent calls for the same URL share a single in-flight `Promise` via a parallel `Map`. The boot path used to fire 2-3 overlapping requests for the same For You artist data; now they all await one Promise.
+- **DNS-prefetch** for `itunes.apple.com`, `rss.marketingtools.apple.com`, and the five `is{1-5}-ssl.mzstatic.com` artwork CDNs. Eliminates the DNS resolution cost on the first request after boot.
+
+### Resilience
+
+- **Multi-artist credit fallback** — chart entries arrive as full credit strings like `"Drake, Future & Molly Santana"` which iTunes search returns 0 results for. `findArtistByName` now splits on `,` / `&` / `feat` / `featuring` / `ft` / `x` / `vs` / `with` and retries with just the primary artist (`"Drake"`). Solo artists with separators in their name (e.g. `"Earth, Wind & Fire"`) are tried full-string first, so they're not incorrectly truncated.
+- **Chart-entry skip-and-retry** — if a chart entry can't resolve to a real artist page, `fetchPrimaryArtist` walks to the next one instead of crashing the For You boot. Only falls back to the static Kanye/MJ rotation when *every* chart name fails. Logs skipped entries to the console for debugging.
+- **Mobile auth button** — `.ibtn::before { inset: -8px }` gives every title-bar button a 44×44 tap target (Apple HIG minimum) while keeping the visual size small. `touch-action: manipulation` kills the 300ms double-tap-zoom delay. The sign-in button shows a pending pulse + `disabled` state between click and Spotify redirect so users don't spam-tap during the async PKCE setup (50-200ms on mobile).
+
 ## Keyboard shortcuts
 
 | Key       | Action                                    |
